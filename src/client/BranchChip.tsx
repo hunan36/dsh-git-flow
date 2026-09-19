@@ -64,8 +64,13 @@ export function GitFlowChip({ sessionId, t }: GitFlowChipProps) {
     void loadStatus()
   }, [loadStatus])
 
+  // Opening the menu is the step before every action here, and files change
+  // between the chip's last read and that click (the agent writes during a
+  // turn). One fresh status keeps the badge, the commit row's enablement, and
+  // the panel that follows in agreement with the repository.
   useEffect(() => {
     if (!open) return
+    void loadStatus()
     void (async () => {
       try {
         setBranches(await gitApi.branches(sessionId))
@@ -73,7 +78,7 @@ export function GitFlowChip({ sessionId, t }: GitFlowChipProps) {
         notify(errorText(t, error), true)
       }
     })()
-  }, [open, sessionId, t, notify])
+  }, [open, sessionId, t, notify, loadStatus])
 
   const refresh = useCallback(() => {
     void loadStatus()
