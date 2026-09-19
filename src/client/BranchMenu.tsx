@@ -109,22 +109,35 @@ export function BranchMenu(props: BranchMenuProps) {
   const tooltip = status.files.length === 0
     ? t('chip.tooltip.clean', { branch: status.head })
     : t('chip.tooltip', { branch: status.head, count: status.files.length })
-  const aheadBehind = status.upstream !== undefined && (status.ahead > 0 || status.behind > 0)
+  // "Not pushed" is two different facts: commits waiting on a tracked branch,
+  // and a branch no remote knows about yet. Both are worth showing, since the
+  // chip is where the user looks to decide whether a push is still owed.
+  const unpushed = status.ahead > 0 ? t('chip.unpushed', { count: status.ahead }) : undefined
+  const noUpstream = status.upstream === undefined ? t('commit.noUpstream') : undefined
+  const aheadBehind = status.upstream !== undefined && status.behind > 0
     ? t('chip.aheadBehind', { ahead: status.ahead, behind: status.behind })
     : undefined
+  const hints = [aheadBehind, unpushed, noUpstream].filter((part): part is string => part !== undefined)
 
   return (
     <>
       <span ref={anchorRef} style={anchorStyle}>
-        <Tooltip label={aheadBehind === undefined ? tooltip : `${tooltip} · ${aheadBehind}`}>
+        <Tooltip label={[tooltip, ...hints].join(' · ')}>
           <Pill
             onClick={() => { props.onOpenChange(!open) }}
-            aria-label={tooltip}
+            aria-label={[tooltip, ...hints].join(' · ')}
             aria-expanded={open}
             style={pillStyle}
           >
             <IconBranchOutline16 size={14} />
             <span style={nameStyle}>{status.head}</span>
+            {status.ahead > 0 && (
+              <span style={aheadStyle}>
+                <IconRightUpOutline16 size={11} />
+                {status.ahead}
+              </span>
+            )}
+            {status.upstream === undefined && <span style={aheadStyle}><IconRightUpOutline16 size={11} /></span>}
             {status.files.length > 0 && <span style={countStyle}>{status.files.length}</span>}
           </Pill>
         </Tooltip>
@@ -193,7 +206,7 @@ export function BranchMenu(props: BranchMenuProps) {
             <ActionRow
               icon={<IconRightUpOutline16 size={14} />}
               label={t('menu.push')}
-              disabled={status.ahead === 0}
+              disabled={status.ahead === 0 && status.upstream !== undefined}
               onClick={() => {
                 props.onOpenChange(false)
                 props.onPush()
@@ -368,6 +381,14 @@ const actionStyle: CSSProperties = {
 }
 const actionIconStyle: CSSProperties = { display: 'inline-flex', flex: '0 0 auto' }
 const disabledStyle: CSSProperties = { opacity: 0.45, cursor: 'default' }
+const aheadStyle: CSSProperties = {
+  display: 'inline-flex',
+  alignItems: 'center',
+  gap: 1,
+  flex: '0 0 auto',
+  fontSize: 11,
+  color: 'var(--dsw-alias-label-secondary, currentColor)',
+}
 const countStyle: CSSProperties = {
   minWidth: 16,
   padding: '0 4px',
