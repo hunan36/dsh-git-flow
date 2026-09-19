@@ -79,9 +79,12 @@ src/
 ## 构建
 
 ```bash
-pnpm install
-pnpm build      # tsc -> lib/types/**，tsdown -> lib/index.js + lib/client.js
+pnpm install     # 触发 prepare -> 自动构建
+pnpm build       # tsc -> lib/types/**，tsdown -> lib/index.js + lib/client.js
 ```
+
+`lib/` 是产物、不进仓库（在 `.gitignore` 里），但 `package.json` 的 `files` 白名单让 `npm pack` / 从 git 安装时**会**带上它 ——
+配合 `prepare: npm run build`，`dsh plugin add https://github.com/hunan36/dsh-git-flow.git` 能装完即用（pnpm 会在装好后跑一次构建）。
 
 产物契约：
 

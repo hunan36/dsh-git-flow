@@ -84,6 +84,7 @@
   },
   "scripts": {
     "build": "rm -rf lib && tsc -p tsconfig.build.json && tsdown",
+    "prepare": "npm run build",
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "watch": "tsdown --watch"
   }
