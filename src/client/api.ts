@@ -36,6 +36,18 @@ export function isSilentError(error: unknown): boolean {
   return error instanceof GitApiError && SILENT.includes(error.code)
 }
 
+/**
+ * Codes that mean the panel's selection no longer matches the repository: a
+ * commit landed, or files were written while the panel was open. The owner
+ * re-reads status so the list catches up instead of failing the same way again.
+ */
+const STALE_SELECTION: readonly GitErrorCode[] = ['git/invalid-input', 'git/no-files-selected']
+
+/** Whether an error means the checked paths are out of date. */
+export function isStaleSelection(error: unknown): boolean {
+  return error instanceof GitApiError && STALE_SELECTION.includes(error.code)
+}
+
 /** Structured codes with dedicated copy; anything else falls back to git's message. */
 const CODED: Partial<Record<GitErrorCode, GitFlowKey>> = {
   'git/not-a-repository': 'error.notRepository',
@@ -52,7 +64,9 @@ const CODED: Partial<Record<GitErrorCode, GitFlowKey>> = {
 export function errorText(t: TranslateNS<'gitFlow'>, error: unknown): string {
   if (!(error instanceof GitApiError)) return t('error.failed', { detail: String(error) })
   const key = CODED[error.code]
-  return key === undefined ? t('error.failed', { detail: error.message }) : t(key)
+  // `detail` is ignored by the keys that carry no placeholder, and it is the
+  // only diagnostic the user gets for the codes whose copy is generic.
+  return key === undefined ? t('error.failed', { detail: error.message }) : t(key, { detail: error.message })
 }
 
 async function request<T>(path: string, init?: RequestInit): Promise<T> {

@@ -63,7 +63,7 @@ const zh = {
   'error.noRoute': '这个会话还没有模型路由，先发出一轮对话再试',
   'error.detached': '当前处于游离 HEAD，先切到一个分支再操作',
   'error.noFiles': '请至少勾选一个文件',
-  'error.invalid': '输入不合法',
+  'error.invalid': '输入不合法：{detail}',
   'error.failed': '操作失败：{detail}',
 } as const
 
@@ -120,7 +120,7 @@ const en: Record<keyof typeof zh, string> = {
   'error.noRoute': 'This session has no model route yet; send one turn first',
   'error.detached': 'The worktree has a detached HEAD; switch to a branch first',
   'error.noFiles': 'Select at least one file',
-  'error.invalid': 'The input is not valid',
+  'error.invalid': 'Invalid input: {detail}',
   'error.failed': 'Operation failed: {detail}',
 }
 

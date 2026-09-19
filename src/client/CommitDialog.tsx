@@ -3,12 +3,12 @@
  * second confirmation a dirty worktree needs before a forced switch.
  * Every mutation goes through `/api/dsh-git-flow/*`, which names only the session.
  */
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import type { CSSProperties } from 'react'
 import { Button, Checkbox, IconBranchOutline16, IconRefreshOutline14, IconSparkle16, IconWarningOutline16, Input, Modal } from '@deepseek-ai/dsh-client-ui-primitives'
 import type { TranslateNS } from '@deepseek-ai/dsh-client-ui-slots'
 import type { GitFileView, GitStatusView } from '../contract.ts'
-import { errorText, gitApi } from './api.ts'
+import { errorText, gitApi, isStaleSelection } from './api.ts'
 
 /** What a dialog reports back to the chip that owns it. */
 export interface DialogHost {
@@ -31,6 +31,14 @@ export function CommitDialog(props: CommitDialogProps) {
   const [busy, setBusy] = useState(false)
   const paths = stageable.filter((file) => chosen.has(file.path)).map((file) => file.path)
   const allSelected = stageable.length > 0 && paths.length === stageable.length
+  const signature = stageable.map((file) => file.path).join('\n')
+
+  // A refresh can replace the whole list while the panel is open (a commit
+  // landed, or the agent wrote files). Re-seed from it so every current file is
+  // checked and a vanished path drops out instead of failing the next request.
+  useEffect(() => {
+    setChosen(new Set(stageable.map((file) => file.path)))
+  }, [signature])
 
   const toggle = (path: string) => {
     setChosen((current) => {
@@ -53,6 +61,7 @@ export function CommitDialog(props: CommitDialogProps) {
       if (draft.fallback) props.notify(t('commit.fallback'), true)
     } catch (error) {
       props.notify(errorText(t, error), true)
+      if (isStaleSelection(error)) props.refresh()
     } finally {
       setGenerating(false)
     }
@@ -87,6 +96,7 @@ export function CommitDialog(props: CommitDialogProps) {
       onClose()
     } catch (error) {
       props.notify(errorText(t, error), true)
+      if (isStaleSelection(error)) props.refresh()
     } finally {
       setBusy(false)
     }

@@ -108,7 +108,13 @@ export function GitFlowChip({ sessionId, t }: GitFlowChipProps) {
         onOpenChange={setOpen}
         onSelectBranch={(name) => { void checkout(name) }}
         onNewBranch={() => { setDialog({ kind: 'new' }) }}
-        onCommit={() => { setDialog({ kind: 'commit' }) }}
+        onCommit={() => {
+          // The panel lists whatever status it was opened with, and files can
+          // change between the chip's last read and this click (another commit,
+          // or the agent writing in the background). Re-read first.
+          refresh()
+          setDialog({ kind: 'commit' })
+        }}
         onRefresh={() => {
           setBranches(undefined)
           refresh()
