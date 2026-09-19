@@ -92,6 +92,9 @@ export interface GitMessageView {
   route?: string
 }
 
+/** Language of an AI-written commit message. */
+export type MessageLanguage = 'zh' | 'en'
+
 /** Envelope every route answers with. */
 export type GitResponse<T> =
   | { ok: true; data: T }
@@ -117,6 +120,8 @@ export interface CommitRequest {
 export interface GenerateMessageRequest {
   sessionId: string
   files: string[]
+  /** Overrides the configured `messageLanguage` for this call. */
+  language?: MessageLanguage
 }
 export interface PushRequest {
   sessionId: string

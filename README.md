@@ -44,7 +44,9 @@ Set in `cordis.patch.yml`:
 | `timeoutMs` | 15000 | Deadline for read-only and local git commands |
 | `pushTimeoutMs` | 120000 | Deadline for `git push`, which waits on a remote |
 | `messageMaxDiffBytes` | 65536 | Cap on the diff bytes handed to the model (truncated past it) |
-| `messageLanguage` | `zh` | Commit-message language, `zh` or `en` |
+| `messageLanguage` | `en` | Default commit-message language, `zh` or `en` |
+
+The commit panel carries an `English | 中文` switch beside "Draft message". It overrides `messageLanguage` for that call and remembers the choice in `localStorage`, so English stays the default until you pick otherwise.
 
 ## Security boundaries
 
@@ -96,6 +98,7 @@ Developed and verified against `@deepseek-ai/dsh@0.1.6-alpha.2`, with peer and d
 ## Known limits
 
 - An AI commit message needs one turn already sent in the session (the provider/model recorded in `request/header`). Without a route the panel answers `git/no-route` and tells you to send one message first; when the model fails or returns nothing usable, the `chore: update N files` template fills in and says so.
+- Messages default to English. The panel's language switch (remembered per browser) and the `messageLanguage` config are the only two inputs; the template fallback follows the same choice.
 - Remote branches appear only once `refs/remotes/**` exists locally (the plugin never fetches in the background); "Refresh status" makes no network call.
 - Conflicted files cannot be checked; resolve the conflict in the conversation first.
 - `git switch --force` discards **all** local changes, not just the conflicting ones — the confirmation copy says exactly that — and the plugin offers no per-file discard.

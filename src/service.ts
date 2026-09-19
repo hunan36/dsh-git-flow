@@ -9,10 +9,12 @@ import type { Context } from '@deepseek-ai/cordis'
 import type { Session } from '@deepseek-ai/dsh-session'
 import type { Workspace } from '@deepseek-ai/dsh-workspace'
 import z from '@deepseek-ai/schemastery'
-import type { GitBranchesView, GitBranchView, GitCommitView, GitFileView, GitMessageView, GitStatusView } from './contract.ts'
+import type { GitBranchesView, GitBranchView, GitCommitView, GitFileView, GitMessageView, GitStatusView, MessageLanguage } from './contract.ts'
 import { describeFailure, GitError, GitRunner, parseStatus } from './git.ts'
 import { generateCommitMessage } from './message.ts'
 import { registerGitFlowRoutes } from './routes.ts'
+
+export type { MessageLanguage }
 
 /** Mountable configuration. */
 export interface GitFlowConfig {
@@ -22,8 +24,8 @@ export interface GitFlowConfig {
   pushTimeoutMs?: number
   /** Upper bound on diff bytes handed to the model. */
   messageMaxDiffBytes?: number
-  /** Commit message language. */
-  messageLanguage?: 'zh' | 'en'
+  /** Default commit message language; the commit panel can override it per call. */
+  messageLanguage?: MessageLanguage
 }
 
 /** A branch ref row from `for-each-ref`. */
@@ -50,7 +52,7 @@ export class GitFlow extends Service {
     timeoutMs: z.number().default(15000),
     pushTimeoutMs: z.number().default(120000),
     messageMaxDiffBytes: z.number().default(65536),
-    messageLanguage: z.union([z.const('zh'), z.const('en')]).default('zh'),
+    messageLanguage: z.union([z.const('zh'), z.const('en')]).default('en'),
   })
 
   private readonly config: Required<Pick<GitFlowConfig, 'timeoutMs' | 'pushTimeoutMs' | 'messageMaxDiffBytes' | 'messageLanguage'>>
@@ -64,7 +66,7 @@ export class GitFlow extends Service {
       timeoutMs: config.timeoutMs ?? 15000,
       pushTimeoutMs: config.pushTimeoutMs ?? 120000,
       messageMaxDiffBytes: config.messageMaxDiffBytes ?? 65536,
-      messageLanguage: config.messageLanguage ?? 'zh',
+      messageLanguage: config.messageLanguage ?? 'en',
     }
     this.git = new GitRunner(ctx.subprocess, this.config.timeoutMs)
     this.pushGit = new GitRunner(ctx.subprocess, this.config.pushTimeoutMs)
@@ -233,8 +235,9 @@ export class GitFlow extends Service {
    * Ask the session's own model route for a commit message over the selected diff.
    * @param sessionId - session whose workspace and route back the call.
    * @param files - paths as reported by {@link status}.
+   * @param language - per-call override for the configured message language.
    */
-  async generateMessage(sessionId: string, files: readonly string[]): Promise<GitMessageView> {
+  async generateMessage(sessionId: string, files: readonly string[], language?: MessageLanguage): Promise<GitMessageView> {
     const status = await this.status(sessionId)
     const selected = selectPaths(status.files, files)
     const diff = await this.collectDiff(status.repo, selected)
@@ -242,7 +245,7 @@ export class GitFlow extends Service {
     return generateCommitMessage({
       ctx: this.ctx,
       session,
-      language: this.config.messageLanguage,
+      language: language ?? this.config.messageLanguage,
       head: status.head,
       selected,
       files: status.files.filter((file) => selected.includes(file.path) || selected.includes(file.oldPath ?? '')),

@@ -43,7 +43,10 @@ headless profile 也能装，但没有 `webServer`，`/api/dsh-git-flow/*` 不�
 | `timeoutMs` | 15000 | 只读/本地 git 命令超时 |
 | `pushTimeoutMs` | 120000 | `git push` 超时（等远端） |
 | `messageMaxDiffBytes` | 65536 | 喂给模型的 diff 字节上限，超出截断 |
-| `messageLanguage` | `zh` | 提交信息语言，`zh` / `en` |
+| `messageLanguage` | `en` | 提交信息默认语言，`zh` / `en` |
+
+提交面板的「生成提交信息」旁有 `English | 中文` 切换，它覆盖本次调用的 `messageLanguage`，并把选择记在 `localStorage`——
+不选就一直默认英文。
 
 ## 安全边界
 
@@ -100,7 +103,8 @@ pnpm build       # tsc -> lib/types/**，tsdown -> lib/index.js + lib/client.js
 
 ## 已知边界
 
-- AI 提交信息要求会话已经有过一轮对话（`request/header` 里记了 provider/model）。没有路由时返回 `git/no-route`，面板提示先发一轮消息；模型失败或输出不合规时用 `chore: 更新 N 个文件` 模板兜底，且会明确告知。
+- AI 提交信息要求会话已经有过一轮对话（`request/header` 里记了 provider/model）。没有路由时返回 `git/no-route`，面板提示先发一轮消息；模型失败或输出不合规时用模板兜底（英文 `chore: update N files` / 中文 `chore: 更新 N 个文件`），且会明确告知。
+- 提交信息默认英文。只有两个入口能改：面板里的语言切换（按浏览器记住）和 `messageLanguage` 配置；模板兜底跟随同一个选择。
 - 远端分支只在本地已有 `refs/remotes/**` 时才可见（插件不做后台 fetch）；「刷新状态」不触发网络。
 - 冲突文件不可勾选，需要先在对话里解决冲突。
 - `git switch --force` 会丢弃**全部**本地改动（不只是冲突的那些），确认框里的文案就是这么写的；插件不提供单独丢弃某个改动的入口。

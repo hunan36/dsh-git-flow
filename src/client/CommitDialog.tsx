@@ -5,10 +5,28 @@
  */
 import { useEffect, useState } from 'react'
 import type { CSSProperties } from 'react'
-import { Button, Checkbox, IconBranchOutline16, IconRefreshOutline14, IconSparkle16, IconWarningOutline16, Input, Modal } from '@deepseek-ai/dsh-client-ui-primitives'
+import { Button, Checkbox, IconBranchOutline16, IconRefreshOutline14, IconSparkle16, IconWarningOutline16, Input, Modal, Pill, Tooltip } from '@deepseek-ai/dsh-client-ui-primitives'
 import type { TranslateNS } from '@deepseek-ai/dsh-client-ui-slots'
-import type { GitFileView, GitStatusView } from '../contract.ts'
+import type { GitFileView, GitStatusView, MessageLanguage } from '../contract.ts'
 import { errorText, gitApi, isStaleSelection } from './api.ts'
+
+/** Languages the panel offers, in display order. */
+const LANGUAGES: readonly MessageLanguage[] = ['en', 'zh']
+/** Endonyms: each option reads correctly in either UI language. */
+const LANGUAGE_LABEL: Record<MessageLanguage, string> = { en: 'English', zh: '中文' }
+/** Where the panel remembers the choice; the host config remains the default. */
+const LANGUAGE_KEY = 'dsh-git-flow:message-language'
+
+/** Stored preference, falling back to the configured default (English). */
+function readLanguage(): MessageLanguage {
+  try {
+    const stored = window.localStorage.getItem(LANGUAGE_KEY)
+    if (stored === 'zh' || stored === 'en') return stored
+  } catch {
+    // Storage can be unavailable (sandboxed frame); the default still works.
+  }
+  return 'en'
+}
 
 /** What a dialog reports back to the chip that owns it. */
 export interface DialogHost {
@@ -29,6 +47,7 @@ export function CommitDialog(props: CommitDialogProps) {
   const [message, setMessage] = useState('')
   const [generating, setGenerating] = useState(false)
   const [busy, setBusy] = useState(false)
+  const [language, setLanguage] = useState<MessageLanguage>(readLanguage)
   const paths = stageable.filter((file) => chosen.has(file.path)).map((file) => file.path)
   const allSelected = stageable.length > 0 && paths.length === stageable.length
   const signature = stageable.map((file) => file.path).join('\n')
@@ -39,6 +58,15 @@ export function CommitDialog(props: CommitDialogProps) {
   useEffect(() => {
     setChosen(new Set(stageable.map((file) => file.path)))
   }, [signature])
+
+  const chooseLanguage = (next: MessageLanguage) => {
+    setLanguage(next)
+    try {
+      window.localStorage.setItem(LANGUAGE_KEY, next)
+    } catch {
+      // A failed write only costs the preference, never the request.
+    }
+  }
 
   const toggle = (path: string) => {
     setChosen((current) => {
@@ -56,7 +84,7 @@ export function CommitDialog(props: CommitDialogProps) {
     }
     setGenerating(true)
     try {
-      const draft = await gitApi.generateMessage({ sessionId, files: paths })
+      const draft = await gitApi.generateMessage({ sessionId, files: paths, language })
       setMessage(draft.message)
       if (draft.fallback) props.notify(t('commit.fallback'), true)
     } catch (error) {
@@ -151,6 +179,20 @@ export function CommitDialog(props: CommitDialogProps) {
       <section style={sectionStyle}>
         <header style={rowHeaderStyle}>
           <span style={headingStyle}>{t('commit.message')}</span>
+          <Tooltip label={t('commit.messageLanguage')}>
+            <span style={languageStyle}>
+              {LANGUAGES.map((id) => (
+                <Pill
+                  key={id}
+                  active={language === id}
+                  disabled={generating || busy}
+                  onClick={() => { chooseLanguage(id) }}
+                >
+                  {LANGUAGE_LABEL[id]}
+                </Pill>
+              ))}
+            </span>
+          </Tooltip>
           <Button
             size="sm"
             variant="ghost"
@@ -297,6 +339,7 @@ function fileCode(file: GitFileView): string {
 
 const sectionStyle: CSSProperties = { display: 'grid', gap: 8, minWidth: 0 }
 const rowHeaderStyle: CSSProperties = { display: 'flex', alignItems: 'center', gap: 10, minWidth: 0 }
+const languageStyle: CSSProperties = { display: 'inline-flex', alignItems: 'center', gap: 4, flex: '0 0 auto' }
 const headingStyle: CSSProperties = { fontSize: 12, color: 'var(--dsw-alias-label-secondary, currentColor)', flex: '0 0 auto' }
 const metaStyle: CSSProperties = { fontSize: 12, color: 'var(--dsw-alias-label-tertiary, currentColor)', flex: '0 0 auto' }
 const listStyle: CSSProperties = {

@@ -57,8 +57,11 @@ export function registerGitFlowRoutes(ctx: Context, service: GitFlow): () => voi
     }) }),
     ctx.webServer.register({ kind: 'exact', path: `${BASE}/generate-message`, handler: (req, res) => handle(req, res, async (body) => {
       requireMethod(req, 'POST')
-      const { sessionId, files } = readBody(body)
-      return service.generateMessage(sessionId, stringArray(files, 'files'))
+      const { sessionId, files, language } = readBody(body)
+      if (language !== undefined && language !== 'zh' && language !== 'en') {
+        throw new GitError('git/invalid-input', 'language must be "zh" or "en"')
+      }
+      return service.generateMessage(sessionId, stringArray(files, 'files'), language)
     }) }),
   ]
   return () => {
