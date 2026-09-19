@@ -35,7 +35,7 @@ const SYSTEM = {
     'type 只能取 feat fix refactor perf docs style test build chore revert。',
     '标题不超过 72 个字符，用祈使句，结尾不加句号。',
     '空一行后用一到三条 `- ` 要点说明改动动机与影响。',
-    '正文使用简体中文；文件路径、标识符、API 名保持原文。',
+    '标题与正文都用简体中文，即使 diff、文件名或分支名是英文；type 前缀、文件路径、标识符、API 名保持原文。',
   ].join('\n'),
   en: [
     'You are writing a git commit message.',
@@ -44,6 +44,7 @@ const SYSTEM = {
     'type must be one of feat fix refactor perf docs style test build chore revert.',
     'Keep the subject at or below 72 characters, imperative mood, no trailing period.',
     'After a blank line add one to three `- ` bullets covering motivation and impact.',
+    'Write both the subject and the body in English, even when the diff, file names, or branch name are not English; keep file paths, identifiers, and API names verbatim.',
   ].join('\n'),
 }
 
