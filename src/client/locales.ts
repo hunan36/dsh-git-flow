@@ -1,0 +1,131 @@
+/**
+ * Browser copy for the git surface. Both dictionaries carry the same keys;
+ * `en` is typed against `zh` so a missing key is a compile error.
+ */
+export const GIT_FLOW_NS = 'gitFlow'
+
+declare module '@deepseek-ai/dsh-client-ui-slots' {
+  interface LocaleNamespaceMap {
+    /** Branch, commit, and push copy owned by this plugin. */
+    gitFlow: GitFlowKey
+  }
+}
+
+const zh = {
+  'chip.tooltip': '当前分支 {branch}，{count} 个未提交改动',
+  'chip.tooltip.clean': '当前分支 {branch}，工作区干净',
+  'chip.aheadBehind': '领先 {ahead}，落后 {behind}',
+  'menu.search': '搜索分支',
+  'menu.local': '本地分支',
+  'menu.remote': '仅在远端',
+  'menu.empty': '没有匹配的分支',
+  'menu.loading': '读取分支…',
+  'menu.newBranch': '新建分支…',
+  'menu.commit': '提交…',
+  'menu.push': '推送提交',
+  'menu.refresh': '刷新状态',
+  'checkout.done': '已切换到 {branch}',
+  'checkout.dirtyTitle': '工作区有未提交改动',
+  'checkout.dirtyBody': '切换到 {branch} 会覆盖本地改动。可以先提交，或者强制切换（`git switch --force` 会丢弃全部本地改动）。',
+  'checkout.force': '强制切换',
+  'create.title': '新建分支',
+  'create.description': '基于当前分支 {branch} 创建并切换。',
+  'create.name': '分支名称',
+  'create.placeholder': '例如 feature/git-flow',
+  'create.submit': '创建并切换',
+  'create.done': '已创建并切换到 {branch}',
+  'commit.title': '提交改动',
+  'commit.description': '只提交勾选的文件；提交信息可由模型生成，也可以自己写。',
+  'commit.files': '改动文件',
+  'commit.selectAll': '全部 {count} 个文件',
+  'commit.message': '提交信息',
+  'commit.messagePlaceholder': '第一行写成 feat: 描述，空一行后可以补充要点',
+  'commit.generate': '生成提交信息',
+  'commit.regenerate': '重新生成',
+  'commit.generating': '正在生成…',
+  'commit.commit': '提交',
+  'commit.commitPush': '提交并推送',
+  'commit.cancel': '取消',
+  'commit.none': '还没有勾选文件',
+  'commit.needMessage': '请先填写提交信息',
+  'commit.selected': '已选 {count} 个文件',
+  'commit.noUpstream': '当前分支还没有上游，首次推送会自动建立',
+  'commit.fallback': '模型没有给出可用信息，已填入模板，可自行修改',
+  'commit.done': '已提交 {hash}',
+  'commit.pushDone': '已提交并推送 {hash}',
+  'commit.pushFail': '已提交 {hash}，但推送失败',
+  'push.done': '已推送 {branch}',
+  'status.clean': '工作区干净',
+  'status.conflict': '有冲突文件',
+  'error.notRepository': '当前工作区不是 git 仓库',
+  'error.notInstalled': '本机没有可用的 git 命令',
+  'error.timeout': 'git 命令超时',
+  'error.noRoute': '这个会话还没有模型路由，先发出一轮对话再试',
+  'error.detached': '当前处于游离 HEAD，先切到一个分支再操作',
+  'error.noFiles': '请至少勾选一个文件',
+  'error.invalid': '输入不合法',
+  'error.failed': '操作失败：{detail}',
+} as const
+
+/** English copy, keyed by the Chinese dictionary so the sets cannot drift. */
+const en: Record<keyof typeof zh, string> = {
+  'chip.tooltip': 'Branch {branch}, {count} uncommitted changes',
+  'chip.tooltip.clean': 'Branch {branch}, working tree clean',
+  'chip.aheadBehind': '{ahead} ahead, {behind} behind',
+  'menu.search': 'Search branches',
+  'menu.local': 'Local branches',
+  'menu.remote': 'Remote only',
+  'menu.empty': 'No matching branch',
+  'menu.loading': 'Loading branches…',
+  'menu.newBranch': 'New branch…',
+  'menu.commit': 'Commit…',
+  'menu.push': 'Push commits',
+  'menu.refresh': 'Refresh status',
+  'checkout.done': 'Switched to {branch}',
+  'checkout.dirtyTitle': 'You have uncommitted changes',
+  'checkout.dirtyBody': 'Switching to {branch} would overwrite local changes. Commit them first, or force the switch and let `git switch --force` discard every local change.',
+  'checkout.force': 'Force switch',
+  'create.title': 'New branch',
+  'create.description': 'Create from the current branch {branch} and switch to it.',
+  'create.name': 'Branch name',
+  'create.placeholder': 'e.g. feature/git-flow',
+  'create.submit': 'Create and switch',
+  'create.done': 'Created and switched to {branch}',
+  'commit.title': 'Commit changes',
+  'commit.description': 'Only the checked files are committed. The message can be drafted by the model or written by you.',
+  'commit.files': 'Changed files',
+  'commit.selectAll': 'All {count} files',
+  'commit.message': 'Commit message',
+  'commit.messagePlaceholder': 'Start with `feat: summary`, optionally add bullets after a blank line',
+  'commit.generate': 'Draft message',
+  'commit.regenerate': 'Regenerate',
+  'commit.generating': 'Drafting…',
+  'commit.commit': 'Commit',
+  'commit.commitPush': 'Commit and push',
+  'commit.cancel': 'Cancel',
+  'commit.none': 'No file selected',
+  'commit.needMessage': 'Write a commit message first',
+  'commit.selected': '{count} files selected',
+  'commit.noUpstream': 'No upstream yet; the first push creates one',
+  'commit.fallback': 'The model returned nothing usable, so a template was filled in',
+  'commit.done': 'Committed {hash}',
+  'commit.pushDone': 'Committed and pushed {hash}',
+  'commit.pushFail': 'Committed {hash}, but the push failed',
+  'push.done': 'Pushed {branch}',
+  'status.clean': 'Working tree clean',
+  'status.conflict': 'Conflicted files',
+  'error.notRepository': 'This workspace is not a git repository',
+  'error.notInstalled': 'git is not available on this machine',
+  'error.timeout': 'The git command timed out',
+  'error.noRoute': 'This session has no model route yet; send one turn first',
+  'error.detached': 'The worktree has a detached HEAD; switch to a branch first',
+  'error.noFiles': 'Select at least one file',
+  'error.invalid': 'The input is not valid',
+  'error.failed': 'Operation failed: {detail}',
+}
+
+/** Both locales, in the shape `ctx.locale.register` validates. */
+export const gitFlowLocale = { zh, en }
+
+/** Every copy key of the `gitFlow` namespace. */
+export type GitFlowKey = keyof typeof zh
