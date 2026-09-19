@@ -1,42 +1,111 @@
 /**
- * The composer-tool-row branch chip and its anchored branch menu. Data and
+ * The composer-tool-row branch chip and its anchored popover. Data and
  * mutations belong to the parent; this component renders rows and reports intent.
+ *
+ * The popover is assembled from the overlay primitives rather than the `Menu`
+ * component: a menu renders every entry into its scrolling viewport, so a
+ * search box there would scroll away with the rows — and would sit inside a
+ * `role="menuitem"` button, where a click selects the row instead of typing.
  */
-import { useState } from 'react'
-import type { CSSProperties } from 'react'
-import { IconBranchOutline16, IconPlusOutline16, IconRefreshOutline14, IconSearchOutline16, Input, Menu, Pill, Tooltip } from '@deepseek-ai/dsh-client-ui-primitives'
-import type { MenuEntry } from '@deepseek-ai/dsh-client-ui-primitives'
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
+import { createPortal } from 'react-dom'
+import type { CSSProperties, ReactNode } from 'react'
+import {
+  IconBranchOutline16,
+  IconCheckOutline16,
+  IconPlusOutline16,
+  IconRefreshOutline14,
+  IconRightUpOutline16,
+  IconSearchOutline16,
+  IconSparkle16,
+  Input,
+  Pill,
+  Tooltip,
+  useDismissOnOutsidePointer,
+} from '@deepseek-ai/dsh-client-ui-primitives'
 import type { TranslateNS } from '@deepseek-ai/dsh-client-ui-slots'
 import type { GitBranchesView, GitStatusView } from '../contract.ts'
 
-/** Reserved row ids; branch rows are prefixed so names cannot collide. */
-const SEARCH_ID = 'search'
-const NEW_ID = 'new'
-const COMMIT_ID = 'commit'
-const REFRESH_ID = 'refresh'
-/** Row id prefix. */
-export const BRANCH_ID_PREFIX = 'branch:'
+/** One rendered row: a group heading or a branch. */
+interface Row {
+  kind: 'group' | 'branch'
+  key: string
+  label: string
+  /** Present on branch rows; remote-only rows carry their `origin/…` name. */
+  name?: string
+}
 
-/** Branch menu props. */
+/** Branch popover props. */
 export interface BranchMenuProps {
   t: TranslateNS<'gitFlow'>
   status: GitStatusView
   /** Branch table, loaded on first open. */
   branches: GitBranchesView | undefined
-  /** True while a load or switch is in flight; the chip shows a spinner-free busy state. */
+  /** True while a load or switch is in flight; the chip shows a busy state. */
   busy: boolean
   open: boolean
   onOpenChange: (open: boolean) => void
   onSelectBranch: (name: string) => void
   onNewBranch: () => void
   onCommit: () => void
+  /** Push what is already committed, without opening the commit panel. */
+  onPush: () => void
   onRefresh: () => void
 }
 
-/** Pill plus anchored branch picker, one row per branch. */
+/** Pill plus anchored branch picker: pinned search, scrolling rows, pinned actions. */
 export function BranchMenu(props: BranchMenuProps) {
   const { t, status, branches, busy, open } = props
+  const anchorRef = useRef<HTMLSpanElement>(null)
+  const panelRef = useRef<HTMLDivElement>(null)
   const [filter, setFilter] = useState('')
+
+  // Anchored by its BOTTOM edge, a gap above the chip. `useAnchoredPosition`
+  // places by `top`, which cannot work for a panel that opens upward and is
+  // capped by the viewport: the clamp then drags it back down over its own
+  // anchor. With a fixed bottom, the height cap below is the only thing that
+  // decides how far up it reaches, so it can never cover the chip.
+  const [placement, setPlacement] = useState<{ left: number; bottom: number; maxHeight: number } | undefined>(undefined)
+  useLayoutEffect(() => {
+    if (!open) {
+      setPlacement(undefined)
+      return
+    }
+    const place = () => {
+      const rect = anchorRef.current?.getBoundingClientRect()
+      if (rect === undefined) return
+      const width = panelRef.current?.offsetWidth ?? PANEL_WIDTH
+      const left = Math.min(Math.max(rect.left, MARGIN), Math.max(MARGIN, window.innerWidth - width - MARGIN))
+      // Space between the chip's top edge and the viewport top, minus the gap
+      // and a margin: the panel scrolls inside whatever is left.
+      const room = rect.top - GAP - MARGIN
+      setPlacement({
+        left,
+        bottom: window.innerHeight - rect.top + GAP,
+        maxHeight: Math.max(PANEL_MIN_HEIGHT, Math.min(PANEL_MAX_HEIGHT, room)),
+      })
+    }
+    place()
+    window.addEventListener('scroll', place, true)
+    window.addEventListener('resize', place)
+    const observer = typeof ResizeObserver === 'undefined' ? undefined : new ResizeObserver(place)
+    if (panelRef.current !== null) observer?.observe(panelRef.current)
+    return () => {
+      observer?.disconnect()
+      window.removeEventListener('scroll', place, true)
+      window.removeEventListener('resize', place)
+    }
+  }, [open])
+  useDismissOnOutsidePointer(anchorRef, open, (next) => { props.onOpenChange(next) }, panelRef)
+
+  // A fresh filter on every open; the input takes focus itself (`autoFocus`).
+  useEffect(() => {
+    if (open) setFilter('')
+  }, [open])
+
+  const rows = useMemo(() => buildRows(t, branches, filter), [t, branches, filter])
+  const firstBranch = rows.find((row) => row.kind === 'branch' && row.name !== status.head)
+
   const tooltip = status.files.length === 0
     ? t('chip.tooltip.clean', { branch: status.head })
     : t('chip.tooltip', { branch: status.head, count: status.files.length })
@@ -44,88 +113,261 @@ export function BranchMenu(props: BranchMenuProps) {
     ? t('chip.aheadBehind', { ahead: status.ahead, behind: status.behind })
     : undefined
 
-  const items: MenuEntry[] = [
-    {
-      id: SEARCH_ID,
-      label: (
-        <Input
-          icon={<IconSearchOutline16 size={14} />}
-          value={filter}
-          placeholder={t('menu.search')}
-          style={searchStyle}
-          onChange={(event) => setFilter(event.target.value)}
-        />
-      ),
-    },
-    ...branchRows(t, branches, filter),
-  ]
-  const footer: MenuEntry[] = [
-    { id: NEW_ID, label: t('menu.newBranch'), icon: <IconPlusOutline16 size={14} /> },
-    { id: COMMIT_ID, label: t('menu.commit'), icon: <IconBranchOutline16 size={14} />, disabled: status.files.length === 0 },
-    { id: REFRESH_ID, label: t('menu.refresh'), icon: <IconRefreshOutline14 size={14} /> },
-  ]
-
   return (
-    <Menu
-      open={open}
-      anchor={(
+    <>
+      <span ref={anchorRef} style={anchorStyle}>
         <Tooltip label={aheadBehind === undefined ? tooltip : `${tooltip} · ${aheadBehind}`}>
-          <span style={anchorStyle}>
-            <Pill onClick={() => { props.onOpenChange(!open) }} aria-label={tooltip} style={pillStyle}>
-              <IconBranchOutline16 size={14} />
-              <span style={nameStyle}>{status.head}</span>
-              {status.files.length > 0 && <span style={countStyle}>{status.files.length}</span>}
-            </Pill>
-          </span>
+          <Pill
+            onClick={() => { props.onOpenChange(!open) }}
+            aria-label={tooltip}
+            aria-expanded={open}
+            style={pillStyle}
+          >
+            <IconBranchOutline16 size={14} />
+            <span style={nameStyle}>{status.head}</span>
+            {status.files.length > 0 && <span style={countStyle}>{status.files.length}</span>}
+          </Pill>
         </Tooltip>
+      </span>
+      {open && createPortal(
+        <div
+          ref={panelRef}
+          role="dialog"
+          aria-label={tooltip}
+          style={{ ...(placement ?? hidingStyle), ...panelStyle }}
+          onKeyDown={(event) => {
+            if (event.key !== 'Escape') return
+            event.stopPropagation()
+            props.onOpenChange(false)
+          }}
+        >
+          <div style={searchRowStyle}>
+            <Input
+              icon={<IconSearchOutline16 size={14} />}
+              value={filter}
+              placeholder={t('menu.search')}
+              autoFocus
+              style={searchInputStyle}
+              onChange={(event) => { setFilter(event.target.value) }}
+              onKeyDown={(event) => {
+                // Enter takes the first row that is not already checked out.
+                if (event.key === 'Enter' && firstBranch !== undefined) {
+                  props.onOpenChange(false)
+                  props.onSelectBranch(firstBranch.name ?? '')
+                }
+              }}
+            />
+          </div>
+          <div style={listStyle} role="menu">
+            {rows.length === 0 && <div style={emptyStyle}>{t('menu.empty')}</div>}
+            {rows.map((row) => (row.kind === 'group'
+              ? <div key={row.key} role="presentation" style={groupStyle}>{row.label}</div>
+              : (
+                <BranchRow
+                  key={row.key}
+                  label={row.label}
+                  title={row.name ?? ''}
+                  current={row.name === status.head}
+                  disabled={busy}
+                  onSelect={() => {
+                    props.onOpenChange(false)
+                    props.onSelectBranch(row.name ?? '')
+                  }}
+                />
+              )))}
+          </div>
+          <div style={actionsStyle}>
+            <ActionRow icon={<IconPlusOutline16 size={14} />} label={t('menu.newBranch')} onClick={() => {
+              props.onOpenChange(false)
+              props.onNewBranch()
+            }} />
+            <ActionRow
+              icon={<IconSparkle16 size={14} />}
+              label={t('menu.commit')}
+              disabled={status.files.length === 0}
+              onClick={() => {
+                props.onOpenChange(false)
+                props.onCommit()
+              }}
+            />
+            <ActionRow
+              icon={<IconRightUpOutline16 size={14} />}
+              label={t('menu.push')}
+              disabled={status.ahead === 0}
+              onClick={() => {
+                props.onOpenChange(false)
+                props.onPush()
+              }}
+            />
+            <ActionRow icon={<IconRefreshOutline14 size={14} />} label={t('menu.refresh')} onClick={() => {
+              props.onOpenChange(false)
+              props.onRefresh()
+            }} />
+          </div>
+        </div>,
+        document.body,
       )}
-      items={items}
-      footer={footer}
-      selectedId={`${BRANCH_ID_PREFIX}${status.head}`}
-      selection="check"
-      onSelect={(id) => {
-        setFilter('')
-        props.onOpenChange(false)
-        if (id.startsWith(BRANCH_ID_PREFIX)) props.onSelectBranch(id.slice(BRANCH_ID_PREFIX.length))
-        else if (id === NEW_ID) props.onNewBranch()
-        else if (id === COMMIT_ID) props.onCommit()
-        else if (id === REFRESH_ID) props.onRefresh()
+    </>
+  )
+}
+
+/** One branch row: the name, a check for the current branch, hover fill. */
+function BranchRow(props: {
+  label: string
+  title: string
+  current: boolean
+  disabled: boolean
+  onSelect: () => void
+}) {
+  const [hover, setHover] = useState(false)
+  return (
+    <button
+      type="button"
+      role="menuitem"
+      disabled={props.disabled}
+      title={props.title}
+      onClick={props.onSelect}
+      onPointerEnter={() => { setHover(true) }}
+      onPointerLeave={() => { setHover(false) }}
+      style={{ ...rowStyle, ...(hover && !props.disabled ? rowHoverStyle : null) }}
+    >
+      <span style={rowNameStyle}>{props.label}</span>
+      {props.current && <IconCheckOutline16 size={14} />}
+    </button>
+  )
+}
+
+/** One pinned action below the scrolling list. */
+function ActionRow(props: { icon: ReactNode; label: string; disabled?: boolean; onClick: () => void }) {
+  const [hover, setHover] = useState(false)
+  return (
+    <button
+      type="button"
+      disabled={props.disabled}
+      onClick={props.onClick}
+      onPointerEnter={() => { setHover(true) }}
+      onPointerLeave={() => { setHover(false) }}
+      style={{
+        ...actionStyle,
+        ...(hover && props.disabled !== true ? rowHoverStyle : null),
+        ...(props.disabled === true ? disabledStyle : null),
       }}
-      onClose={() => { props.onOpenChange(false) }}
-      autoFocus={false}
-      portal
-      side="top"
-      dense
-    />
+    >
+      <span style={actionIconStyle}>{props.icon}</span>
+      {props.label}
+    </button>
   )
 }
 
 /** Local rows, then the remote-only ones, filtered by the search text. */
-function branchRows(
-  t: TranslateNS<'gitFlow'>,
-  branches: GitBranchesView | undefined,
-  filter: string,
-): MenuEntry[] {
-  if (branches === undefined) return [{ id: 'loading', label: t('menu.loading'), disabled: true }]
+function buildRows(t: TranslateNS<'gitFlow'>, branches: GitBranchesView | undefined, filter: string): Row[] {
+  if (branches === undefined) return [{ kind: 'group', key: 'loading', label: t('menu.loading') }]
   const needle = filter.trim().toLowerCase()
   const named = (name: string) => name.toLowerCase().includes(needle)
-  const rows: MenuEntry[] = []
-  const group = (label: string, list: readonly string[]) => {
+  const rows: Row[] = []
+  const group = (label: string, list: readonly Row[]) => {
     if (list.length === 0) return
-    rows.push({ type: 'label', id: label, text: `${label} · ${list.length}` })
-    for (const name of list) rows.push({ id: `${BRANCH_ID_PREFIX}${name}`, label: <span style={rowStyle}>{name}</span> })
+    rows.push({ kind: 'group', key: `group:${label}`, label: `${label} · ${list.length}` })
+    rows.push(...list)
   }
-  group(t('menu.local'), branches.local.filter((branch) => !branch.remoteOnly && named(branch.name)).map((branch) => branch.name))
-  group(t('menu.remote'), branches.local.filter((branch) => branch.remoteOnly && named(branch.name)).map((branch) => branch.name))
-  if (rows.length === 0) rows.push({ id: 'empty', label: t('menu.empty'), disabled: true })
+  group(t('menu.local'), branches.local
+    .filter((branch) => !branch.remoteOnly && named(branch.name))
+    .map((branch) => ({ kind: 'branch' as const, key: `local:${branch.name}`, label: branch.name, name: branch.name })))
+  group(t('menu.remote'), branches.local
+    .filter((branch) => branch.remoteOnly && named(branch.name))
+    .map((branch) => ({ kind: 'branch' as const, key: `remote:${branch.name}`, label: branch.name, name: branch.name })))
   return rows
 }
 
+/** Fixed-position placeholder for the frame before the anchor is measured. */
+const hidingStyle: CSSProperties = { position: 'fixed', left: 0, bottom: 0, visibility: 'hidden' }
+/** Design width of the popover card. */
+const PANEL_WIDTH = 268
+/** Distance kept between the chip's top edge and the popover. */
+const GAP = 8
+/** Distance kept between the popover and each viewport edge. */
+const MARGIN = 12
+/** Height cap on a tall window, and the floor that keeps the card usable. */
+const PANEL_MAX_HEIGHT = 420
+const PANEL_MIN_HEIGHT = 180
 const anchorStyle: CSSProperties = { display: 'inline-flex' }
 const pillStyle: CSSProperties = { gap: 6, maxWidth: 240 }
 const nameStyle: CSSProperties = { overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }
-const rowStyle: CSSProperties = { display: 'flex', alignItems: 'center', gap: 8, width: '100%' }
-const searchStyle: CSSProperties = { width: '100%' }
+const panelStyle: CSSProperties = {
+  // `useAnchoredPosition` returns coordinates only — the fixed positioning that
+  // makes them mean anything is the caller's job (the Menu primitive gets it
+  // from its own stylesheet). Without this the portaled card lands in normal
+  // flow at the end of <body>.
+  position: 'fixed',
+  // Above modal overlays (z 1000), like a portaled Menu: an anchor can sit
+  // inside a dialog and still expect its popover on top.
+  zIndex: 1100,
+  display: 'flex',
+  flexDirection: 'column',
+  width: PANEL_WIDTH,
+  background: 'var(--dsw-specific-menu, var(--dsw-alias-bg-layer-1, #ffffff))',
+  border: '1px solid var(--dsw-alias-border-l1, rgba(127,127,127,0.25))',
+  borderRadius: 16,
+  boxShadow: 'var(--dsw-elevation-prominent, 0 12px 32px rgba(0,0,0,0.16))',
+  overflow: 'hidden',
+}
+const searchRowStyle: CSSProperties = {
+  flex: '0 0 auto',
+  padding: '8px 8px 6px',
+  borderBottom: '1px solid var(--dsw-alias-border-l3, rgba(127,127,127,0.16))',
+}
+const searchInputStyle: CSSProperties = { width: '100%' }
+const listStyle: CSSProperties = { flex: '1 1 auto', minHeight: 0, overflowY: 'auto', padding: 4 }
+const actionsStyle: CSSProperties = {
+  flex: '0 0 auto',
+  padding: 4,
+  borderTop: '1px solid var(--dsw-alias-border-l3, rgba(127,127,127,0.16))',
+}
+const rowStyle: CSSProperties = {
+  display: 'flex',
+  alignItems: 'center',
+  justifyContent: 'space-between',
+  gap: 8,
+  width: '100%',
+  padding: '6px 8px',
+  border: 'none',
+  borderRadius: 8,
+  background: 'transparent',
+  color: 'var(--dsw-alias-label-primary, inherit)',
+  font: 'inherit',
+  fontSize: 13,
+  textAlign: 'left',
+  cursor: 'pointer',
+}
+const rowHoverStyle: CSSProperties = { background: 'var(--dsw-alias-bg-layer-2, rgba(127,127,127,0.10))' }
+const rowNameStyle: CSSProperties = { overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }
+const groupStyle: CSSProperties = {
+  padding: '6px 8px 2px',
+  fontSize: 11,
+  color: 'var(--dsw-alias-label-tertiary, currentColor)',
+}
+const emptyStyle: CSSProperties = {
+  padding: '10px 8px',
+  fontSize: 12,
+  color: 'var(--dsw-alias-label-tertiary, currentColor)',
+}
+const actionStyle: CSSProperties = {
+  display: 'flex',
+  alignItems: 'center',
+  gap: 8,
+  width: '100%',
+  padding: '6px 8px',
+  border: 'none',
+  borderRadius: 8,
+  background: 'transparent',
+  color: 'var(--dsw-alias-label-primary, inherit)',
+  font: 'inherit',
+  fontSize: 13,
+  textAlign: 'left',
+  cursor: 'pointer',
+}
+const actionIconStyle: CSSProperties = { display: 'inline-flex', flex: '0 0 auto' }
+const disabledStyle: CSSProperties = { opacity: 0.45, cursor: 'default' }
 const countStyle: CSSProperties = {
   minWidth: 16,
   padding: '0 4px',
@@ -134,5 +376,5 @@ const countStyle: CSSProperties = {
   fontSize: 11,
   lineHeight: '16px',
   background: 'var(--dsw-alias-state-warn-primary, currentColor)',
-  color: 'var(--dsw-alias-label-primary-inverted, #fff)',
+  color: 'var(--dsw-alias-label-primary-inverted, #ffffff)',
 }

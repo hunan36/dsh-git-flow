@@ -86,12 +86,37 @@ export function CommitDialog(props: CommitDialogProps) {
     try {
       const draft = await gitApi.generateMessage({ sessionId, files: paths, language })
       setMessage(draft.message)
-      if (draft.fallback) props.notify(t('commit.fallback'), true)
+      // A host older than this page accepts the request but drops `language`,
+      // so the choice silently does nothing until the process is restarted.
+      if (draft.language !== language) props.notify(t('commit.staleHost'), true)
+      else if (draft.fallback) {
+        // A route-level failure (bad model, rejected effort, revoked key) is
+        // worth naming: the user can fix it instead of shipping the template.
+        props.notify(
+          draft.reason === undefined ? t('commit.fallback') : t('commit.fallbackReason', { detail: draft.reason }),
+          true,
+        )
+      }
     } catch (error) {
       props.notify(errorText(t, error), true)
       if (isStaleSelection(error)) props.refresh()
     } finally {
       setGenerating(false)
+    }
+  }
+
+  /** Push what is already committed, without making a new commit. */
+  const pushOnly = async () => {
+    setBusy(true)
+    try {
+      await gitApi.push({ sessionId })
+      props.notify(t('push.done', { branch: status.head }))
+      props.refresh()
+      onClose()
+    } catch (error) {
+      props.notify(errorText(t, error), true)
+    } finally {
+      setBusy(false)
     }
   }
 
@@ -144,38 +169,19 @@ export function CommitDialog(props: CommitDialogProps) {
             {status.upstream === undefined && ` · ${t('commit.noUpstream')}`}
           </div>
           <div style={actionsStyle}>
-            <Button size="sm" onClick={onClose} disabled={busy}>{t('commit.cancel')}</Button>
-            <Button size="sm" variant="outline" onClick={() => { void submit(false) }} disabled={busy || generating}>{t('commit.commit')}</Button>
-            <Button size="sm" variant="primary" icon={<IconBranchOutline16 size={14} />} onClick={() => { void submit(true) }} disabled={busy || generating}>{t('commit.commitPush')}</Button>
+            <Button size="sm" variant="ghost" onClick={() => { void pushOnly() }} disabled={busy || generating}>
+              {t('commit.push')}
+            </Button>
+            <Button size="sm" variant="outline" onClick={() => { void submit(true) }} disabled={busy || generating}>
+              {t('commit.commitPush')}
+            </Button>
+            <Button size="sm" variant="primary" onClick={() => { void submit(false) }} disabled={busy || generating}>
+              {t('commit.commit')}
+            </Button>
           </div>
         </div>
       )}
     >
-      <section style={sectionStyle}>
-        <header style={rowHeaderStyle}>
-          <Checkbox
-            checked={allSelected}
-            onChange={(next) => setChosen(next ? new Set(stageable.map((file) => file.path)) : new Set())}
-            label={t('commit.selectAll', { count: stageable.length })}
-            disabled={busy || stageable.length === 0}
-          />
-          <span style={headingStyle}>{t('commit.files')}</span>
-        </header>
-        <div style={listStyle}>
-          {rows.map((file) => (
-            <div key={file.path} style={fileRowStyle}>
-              <Checkbox
-                checked={chosen.has(file.path)}
-                onChange={() => toggle(file.path)}
-                label={filePath(file)}
-                disabled={file.conflicted || busy}
-              />
-              <span style={fileCodeStyle(file)} title={file.conflicted ? t('status.conflict') : undefined}>{fileCode(file)}</span>
-            </div>
-          ))}
-        </div>
-      </section>
-
       <section style={sectionStyle}>
         <header style={rowHeaderStyle}>
           <span style={headingStyle}>{t('commit.message')}</span>
@@ -208,12 +214,71 @@ export function CommitDialog(props: CommitDialogProps) {
           style={textareaStyle}
           value={message}
           placeholder={t('commit.messagePlaceholder')}
-          rows={6}
+          rows={5}
           spellCheck={false}
           onChange={(event) => setMessage(event.target.value)}
         />
       </section>
+
+      <section style={sectionStyle}>
+        <header style={rowHeaderStyle}>
+          <span style={headingStyle}>{t('commit.files')}</span>
+          <span style={metaStyle}>{t('commit.selected', { count: paths.length })}</span>
+          <Checkbox
+            checked={allSelected}
+            onChange={(next) => setChosen(next ? new Set(stageable.map((file) => file.path)) : new Set())}
+            label={t('commit.selectAll', { count: stageable.length })}
+            disabled={busy || stageable.length === 0}
+          />
+        </header>
+        <div style={listStyle}>
+          {rows.length === 0 && <div style={emptyListStyle}>{t('commit.none')}</div>}
+          {rows.map((file) => (
+            <FileRow
+              key={file.path}
+              path={filePath(file)}
+              code={fileCode(file)}
+              tone={fileTone(file)}
+              title={file.conflicted ? t('status.conflict') : file.path}
+              checked={chosen.has(file.path)}
+              disabled={file.conflicted || busy}
+              onToggle={() => { toggle(file.path) }}
+            />
+          ))}
+        </div>
+      </section>
     </Modal>
+  )
+}
+
+/** One changed path: its checkbox, the path as its label, and a status badge. */
+function FileRow(props: {
+  path: string
+  code: string
+  tone: string
+  title: string
+  checked: boolean
+  disabled: boolean
+  onToggle: () => void
+}) {
+  const [hover, setHover] = useState(false)
+  return (
+    <div
+      style={{ ...fileRowStyle, ...(hover && !props.disabled ? rowHoverStyle : null) }}
+      onPointerEnter={() => { setHover(true) }}
+      onPointerLeave={() => { setHover(false) }}
+    >
+      <span style={checkboxWrapStyle}>
+        <Checkbox
+          checked={props.checked}
+          onChange={props.onToggle}
+          label={props.path}
+          title={props.title}
+          disabled={props.disabled}
+        />
+      </span>
+      <span style={{ ...badgeStyle, color: props.tone }}>{props.code}</span>
+    </div>
   )
 }
 
@@ -344,14 +409,41 @@ const headingStyle: CSSProperties = { fontSize: 12, color: 'var(--dsw-alias-labe
 const metaStyle: CSSProperties = { fontSize: 12, color: 'var(--dsw-alias-label-tertiary, currentColor)', flex: '0 0 auto' }
 const listStyle: CSSProperties = {
   display: 'grid',
-  gap: 2,
-  maxHeight: 220,
+  gap: 1,
+  maxHeight: 216,
   overflowY: 'auto',
   border: '1px solid var(--dsw-alias-border-l2, rgba(127,127,127,0.25))',
-  borderRadius: 8,
-  padding: '6px 8px',
+  borderRadius: 10,
+  padding: 4,
 }
-const fileRowStyle: CSSProperties = { display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10, minWidth: 0 }
+const emptyListStyle: CSSProperties = {
+  padding: '10px 8px',
+  fontSize: 12,
+  color: 'var(--dsw-alias-label-tertiary, currentColor)',
+}
+const fileRowStyle: CSSProperties = {
+  display: 'flex',
+  alignItems: 'center',
+  justifyContent: 'space-between',
+  gap: 8,
+  minWidth: 0,
+  padding: '3px 6px',
+  borderRadius: 6,
+}
+const rowHoverStyle: CSSProperties = { background: 'var(--dsw-alias-bg-layer-2, rgba(127,127,127,0.10))' }
+const checkboxWrapStyle: CSSProperties = { display: 'flex', alignItems: 'center', minWidth: 0, overflow: 'hidden' }
+const badgeStyle: CSSProperties = {
+  flex: '0 0 auto',
+  minWidth: 22,
+  padding: '0 5px',
+  border: '1px solid currentColor',
+  borderRadius: 6,
+  fontFamily: 'var(--dsw-font-mono, ui-monospace, monospace)',
+  fontSize: 10,
+  lineHeight: '16px',
+  textAlign: 'center',
+  opacity: 0.9,
+}
 const footerStyle: CSSProperties = { display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, width: '100%' }
 const actionsStyle: CSSProperties = { display: 'flex', alignItems: 'center', gap: 8, justifyContent: 'flex-end' }
 const branchInputStyle: CSSProperties = { width: '100%' }
@@ -371,14 +463,10 @@ const textareaStyle: CSSProperties = {
 }
 
 /** Codes that add content read as success, removals as warning, the rest neutral. */
-function fileCodeStyle(file: GitFileView): CSSProperties {
+function fileTone(file: GitFileView): string {
   const code = fileCode(file)
-  const tone = code === 'U'
-    ? 'var(--dsw-alias-state-error-primary, currentColor)'
-    : code === '?' || code[1] === 'A' || code === 'AM'
-      ? 'var(--dsw-alias-state-success-primary, currentColor)'
-      : code === 'D' || code[1] === 'D'
-        ? 'var(--dsw-alias-state-warn-primary, currentColor)'
-        : 'var(--dsw-alias-label-tertiary, currentColor)'
-  return { flex: '0 0 auto', fontSize: 11, fontFamily: 'var(--dsw-font-mono, ui-monospace, monospace)', color: tone }
+  if (code === 'U') return 'var(--dsw-alias-state-error-primary, currentColor)'
+  if (code === '?' || code[1] === 'A' || code === 'AM') return 'var(--dsw-alias-state-success-primary, currentColor)'
+  if (code === 'D' || code[1] === 'D') return 'var(--dsw-alias-state-warn-primary, currentColor)'
+  return 'var(--dsw-alias-label-tertiary, currentColor)'
 }

@@ -88,6 +88,13 @@ export interface GitMessageView {
   message: string
   /** True when the model produced nothing usable and the template was used. */
   fallback: boolean
+  /** Why the model answer was unusable: its failure, or a rejected shape. */
+  reason?: string
+  /**
+   * Language the message was actually written in. Absent on a host older than
+   * the language option, which is how the panel notices a stale host process.
+   */
+  language?: MessageLanguage
   /** Route used, so a stale model choice is diagnosable. */
   route?: string
 }

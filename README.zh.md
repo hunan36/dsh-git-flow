@@ -40,7 +40,7 @@ headless profile 也能装，但没有 `webServer`，`/api/dsh-git-flow/*` 不�
 
 | 键 | 默认 | 说明 |
 |---|---|---|
-| `timeoutMs` | 15000 | 只读/本地 git 命令超时888 |
+| `timeoutMs` | 15000 | 只读/本地 git 命令超时 |
 | `pushTimeoutMs` | 120000 | `git push` 超时（等远端） |
 | `messageMaxDiffBytes` | 65536 | 喂给模型的 diff 字节上限，超出截断 |
 | `messageLanguage` | `en` | 提交信息默认语言，`zh` / `en` |

@@ -84,6 +84,20 @@ export function GitFlowChip({ sessionId, t }: GitFlowChipProps) {
     void loadStatus()
   }, [loadStatus])
 
+  /** Push the current branch's unpushed commits, straight from the menu. */
+  const pushCommits = async () => {
+    setBusy(true)
+    try {
+      await gitApi.push({ sessionId })
+      notify(t('push.done', { branch: status?.head ?? '' }))
+      refresh()
+    } catch (error) {
+      notify(errorText(t, error), true)
+    } finally {
+      setBusy(false)
+    }
+  }
+
   const checkout = async (name: string) => {
     if (name === status?.head) return
     setBusy(true)
@@ -120,6 +134,7 @@ export function GitFlowChip({ sessionId, t }: GitFlowChipProps) {
           refresh()
           setDialog({ kind: 'commit' })
         }}
+        onPush={() => { void pushCommits() }}
         onRefresh={() => {
           setBranches(undefined)
           refresh()

@@ -24,6 +24,13 @@ export interface CommitMessageInput {
 
 /** Bound on the auxiliary call itself, independent of git timeouts. */
 const MESSAGE_TIMEOUT_MS = 60000
+/**
+ * Output budget for the auxiliary call. A reasoning model counts its thinking
+ * against this, and with a wide selection (many files, a truncated diff) the
+ * thinking alone can exhaust a small budget: the stream then ends with no text
+ * at all and the answer is unusable. 4096 leaves room for both.
+ */
+const MESSAGE_MAX_TOKENS = 4096
 /** Commit messages longer than this are treated as the model rambling. */
 const MAX_MESSAGE_CHARS = 2000
 
@@ -51,24 +58,43 @@ const SYSTEM = {
 /**
  * Produce one commit message for the selection.
  * @throws {GitError} `git/no-route` when the session has no logged model route.
- * @returns the message plus whether the template fallback had to be used.
+ * @returns the message plus whether the template fallback had to be used, and
+ * why it was, so the panel can report a broken route instead of a vague notice.
  */
 export async function generateCommitMessage(input: CommitMessageInput): Promise<GitMessageView> {
   const config = input.session?.requestHeader()?.config
   if (config === undefined) {
     throw new GitError('git/no-route', 'this session has no recorded model route yet; send one message in the conversation first')
   }
+  const route = `${config.provider}/${config.model}`
   const fallback = fallbackMessage(input)
   let raw = ''
   try {
     raw = await streamMessage(input, config.provider, config.model)
   } catch (error) {
+    // The route may be unusable (a rejected reasoning effort, a revoked key, a
+    // model that answers with a tool call); the panel shows this reason.
     input.ctx.logger.warn(`dsh-git-flow: message model failed, using template: ${String(error)}`)
-    return { message: fallback, fallback: true, route: `${config.provider}/${config.model}` }
+    return { message: fallback, fallback: true, reason: describeModelFailure(error), language: input.language, route }
   }
   const message = normalize(raw)
-  if (message === undefined) return { message: fallback, fallback: true, route: `${config.provider}/${config.model}` }
-  return { message, fallback: false, route: `${config.provider}/${config.model}` }
+  if (message === undefined) {
+    input.ctx.logger.warn(`dsh-git-flow: message model answer rejected, using template: ${JSON.stringify(raw.slice(0, 200))}`)
+    // An empty answer and a chatty one are different problems for the user:
+    // the first means the model never got to the message, the second that it
+    // ignored the required shape.
+    const reason = raw.trim().length === 0
+      ? 'the model returned no text (its output budget may have gone to reasoning)'
+      : 'the model answer was not a conventional commit message'
+    return { message: fallback, fallback: true, reason, language: input.language, route }
+  }
+  return { message, fallback: false, language: input.language, route }
+}
+
+/** One line of failure text for the panel, without a stack or multi-line dump. */
+function describeModelFailure(error: unknown): string {
+  const text = error instanceof Error ? error.message : String(error)
+  return text.replace(/\s+/g, ' ').trim().slice(0, 300) || 'unknown model failure'
 }
 
 /** One model call, returning its concatenated text blocks. */
@@ -85,7 +111,7 @@ async function streamMessage(input: CommitMessageInput, provider: string, model:
       content: [{ type: 'text', text: buildUserPrompt(input) }],
       source: { kind: 'plugin', plugin: 'dsh-git-flow' },
     }],
-    maxTokens: 512,
+    maxTokens: MESSAGE_MAX_TOKENS,
     temperature: 0.2,
     sessionId: input.session?.id,
     signal,
