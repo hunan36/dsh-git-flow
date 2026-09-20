@@ -41,19 +41,22 @@ A dsh profile directory is itself a pnpm workspace (`pnpm-workspace.yaml` with `
 
 Any one of these gets you through:
 
-1. Pass `-w` through (dsh forwards extra arguments to pnpm):
-
-   ```bash
-   dsh plugin --profile gitflow-web add -w https://github.com/hunan36/dsh-git-flow.git
-   ```
-
-2. Teach the profile to accept it, then install exactly as documented:
+1. **Installing from the plugin page (GUI)**: that path runs `pnpm add <spec>` and cannot pass `-w`, so do step 2 first (write the `.npmrc`) and then press "Retry" in the dialog — the same command then succeeds under pnpm 8.
+2. Teach the profile to accept a root dependency, then install exactly as documented:
 
    ```bash
    echo 'ignore-workspace-root-check=true' >> ~/.dsh/profiles/gitflow-web/.npmrc
    ```
 
-3. Put the profile on pnpm 10 (the version this plugin is tested with): run `corepack use pnpm@10` in the profile, or set the `packageManager` field Corepack added to `pnpm@10.22.0`.
+3. From the CLI, pass `-w` through (dsh forwards extra arguments to pnpm):
+
+   ```bash
+   dsh plugin --profile gitflow-web add -w https://github.com/hunan36/dsh-git-flow.git
+   ```
+
+4. Put the profile on pnpm 10 (the version this plugin is tested with): run `corepack use pnpm@10` in the profile, or set the `packageManager` field Corepack added to `pnpm@10.22.0`.
+
+Note that after the first failure Corepack has already written `packageManager: pnpm@8.15.7+sha512…` into that profile's `package.json`, so every later plugin operation there uses pnpm 8 — step 4 is the durable fix.
 
 Requires Node `^22.19.0 || >=24.0.0` and pnpm 10; this repository pins it with `packageManager: pnpm@10.22.0`.
 

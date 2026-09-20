@@ -38,21 +38,24 @@ headless profile 也能装，但没有 `webServer`，`/api/dsh-git-flow/*` 不�
 
 dsh 的 profile 目录本身就是一个 pnpm workspace（`pnpm-workspace.yaml` 里 `packages: [.]`），而 pnpm 8 会把 `pnpm add` 当成「往 workspace 根加依赖」直接拒绝。profile 的 `package.json` 没有 `packageManager` 字段时，Node 自带的 Corepack 会自动补一个（常见是 `pnpm@8.15.7`），于是安装卡在这个检查上 —— 它发生在 pnpm 解析本插件**之前**，与本插件无关。
 
-三种走法任选其一：
+四种走法任选其一：
 
-1. 透传 `-w`（dsh 会把多余参数原样转发给 pnpm）：
-
-   ```bash
-   dsh plugin --profile gitflow-web add -w https://github.com/hunan36/dsh-git-flow.git
-   ```
-
+1. **插件页（GUI）安装**：那里的命令是 `pnpm add <地址>`，加不了 `-w` —— 先做第 2 步写 `.npmrc`，再点对话框里的「重试」即可（pnpm 8 下实测通过）。
 2. 让这个 profile 接受根依赖，之后照常按文档安装：
 
    ```bash
    echo 'ignore-workspace-root-check=true' >> ~/.dsh/profiles/gitflow-web/.npmrc
    ```
 
-3. 把这个 profile 切到 pnpm 10（本插件实测版本）：在 profile 目录执行 `corepack use pnpm@10`，或把 Corepack 补进 `package.json` 的 `packageManager` 改成 `pnpm@10.22.0`。
+3. 命令行安装时透传 `-w`（dsh 会把多余参数原样转发给 pnpm）：
+
+   ```bash
+   dsh plugin --profile gitflow-web add -w https://github.com/hunan36/dsh-git-flow.git
+   ```
+
+4. 把这个 profile 切到 pnpm 10（本插件实测版本）：在 profile 目录执行 `corepack use pnpm@10`，或把 Corepack 补进 `package.json` 的 `packageManager` 改成 `pnpm@10.22.0`。
+
+注意第一次失败后，Corepack 已经把 `packageManager: pnpm@8.15.7+sha512…` 写进了该 profile 的 `package.json`，之后这个 profile 的所有插件操作都会用 pnpm 8 —— 用第 4 步把它改掉最省事。
 
 前置版本：Node `^22.19.0 || >=24.0.0`、pnpm 10；本仓库已用 `packageManager: pnpm@10.22.0` 声明。
 
