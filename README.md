@@ -35,6 +35,28 @@ dsh --profile gitflow-web
 
 The `headless` profile installs too, but it has no `webServer`: no `/api/dsh-git-flow/*` route is registered, the browser half does not exist there, and boot reports no error.
 
+### Installation fails with ERR_PNPM_ADDING_TO_ROOT
+
+A dsh profile directory is itself a pnpm workspace (`pnpm-workspace.yaml` with `packages: [.]`), and pnpm 8 treats `pnpm add` there as adding to a workspace root — which it refuses. When the profile has no `packageManager` field, Node's Corepack fills one in (commonly `pnpm@8.15.7`), and the install then dies on that check **before it ever resolves this plugin**, so the failure is not about this package.
+
+Any one of these gets you through:
+
+1. Pass `-w` through (dsh forwards extra arguments to pnpm):
+
+   ```bash
+   dsh plugin --profile gitflow-web add -w https://github.com/hunan36/dsh-git-flow.git
+   ```
+
+2. Teach the profile to accept it, then install exactly as documented:
+
+   ```bash
+   echo 'ignore-workspace-root-check=true' >> ~/.dsh/profiles/gitflow-web/.npmrc
+   ```
+
+3. Put the profile on pnpm 10 (the version this plugin is tested with): run `corepack use pnpm@10` in the profile, or set the `packageManager` field Corepack added to `pnpm@10.22.0`.
+
+Requires Node `^22.19.0 || >=24.0.0` and pnpm 10; this repository pins it with `packageManager: pnpm@10.22.0`.
+
 ## Configuration
 
 Set in `cordis.patch.yml`:

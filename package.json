@@ -52,6 +52,7 @@
       ]
     }
   },
+  "packageManager": "pnpm@10.22.0",
   "engines": {
     "node": "^22.19.0 || >=24.0.0"
   },
