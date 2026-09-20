@@ -2,7 +2,7 @@
 
 English | [中文](README.zh.md)
 
-**Version 0.1.0-rc.3** (pre-release) — a DeepSeek Harness workspace git plugin: a branch chip in the composer tool row. Open it to browse branches, switch branches, create one, and commit a checked subset of files — the commit message is written by the session's own model from the diff.
+**Version 0.1.0-rc.4** (pre-release) — a DeepSeek Harness workspace git plugin: a branch chip in the composer tool row. Open it to browse branches, switch branches, create one, and commit a checked subset of files — the commit message is written by the session's own model from the diff.
 
 ```
 composer tool row:  [⑂ feature/login  3]  ← click
