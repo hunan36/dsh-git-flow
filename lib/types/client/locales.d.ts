@@ -1,0 +1,138 @@
+/**
+ * Browser copy for the git surface. Both dictionaries carry the same keys;
+ * `en` is typed against `zh` so a missing key is a compile error.
+ */
+export declare const GIT_FLOW_NS = "gitFlow";
+declare module '@deepseek-ai/dsh-client-ui-slots' {
+    interface LocaleNamespaceMap {
+        /** Branch, commit, and push copy owned by this plugin. */
+        gitFlow: GitFlowKey;
+    }
+}
+declare const zh: {
+    readonly 'chip.tooltip': "当前分支 {branch}，{count} 个未提交改动";
+    readonly 'chip.tooltip.clean': "当前分支 {branch}，工作区干净";
+    readonly 'chip.aheadBehind': "领先 {ahead}，落后 {behind}";
+    readonly 'chip.unpushed': "有 {count} 个提交未推送";
+    readonly 'menu.search': "搜索分支";
+    readonly 'menu.local': "本地分支";
+    readonly 'menu.remote': "仅在远端";
+    readonly 'menu.empty': "没有匹配的分支";
+    readonly 'menu.loading': "读取分支…";
+    readonly 'menu.newBranch': "新建分支…";
+    readonly 'menu.commit': "提交…";
+    readonly 'menu.push': "推送提交";
+    readonly 'menu.refresh': "刷新状态";
+    readonly 'checkout.done': "已切换到 {branch}";
+    readonly 'checkout.dirtyTitle': "工作区有未提交改动";
+    readonly 'checkout.dirtyBody': "切换到 {branch} 会覆盖本地改动。可以先提交，或者强制切换（`git switch --force` 会丢弃全部本地改动）。";
+    readonly 'checkout.force': "强制切换";
+    readonly 'create.title': "新建分支";
+    readonly 'create.description': "基于当前分支 {branch} 创建并切换。";
+    readonly 'create.name': "分支名称";
+    readonly 'create.placeholder': "例如 feature/git-flow";
+    readonly 'create.submit': "创建并切换";
+    readonly 'create.done': "已创建并切换到 {branch}";
+    readonly 'commit.title': "提交改动";
+    readonly 'commit.description': "只提交勾选的文件；提交信息可由模型生成，也可以自己写。";
+    readonly 'commit.files': "改动文件";
+    readonly 'commit.selectAll': "全部 {count} 个文件";
+    readonly 'commit.message': "提交信息";
+    readonly 'commit.messageLanguage': "提交信息语言";
+    readonly 'commit.messagePlaceholder': "第一行写成 feat: 描述，空一行后可以补充要点";
+    readonly 'commit.generate': "生成提交信息";
+    readonly 'commit.regenerate': "重新生成";
+    readonly 'commit.generating': "正在生成…";
+    readonly 'commit.push': "推送";
+    readonly 'commit.commit': "提交";
+    readonly 'commit.commitPush': "提交并推送";
+    readonly 'commit.cancel': "取消";
+    readonly 'commit.none': "还没有勾选文件";
+    readonly 'commit.needMessage': "请先填写提交信息";
+    readonly 'commit.selected': "已选 {count} 个文件";
+    readonly 'commit.noUpstream': "当前分支还没有上游，首次推送会自动建立";
+    readonly 'commit.fallback': "模型没有给出可用信息，已填入模板，可自行修改";
+    readonly 'commit.staleHost': "语言选择没生效：宿主进程还是旧版本，重启 dsh web 后再试";
+    readonly 'commit.fallbackReason': "模型没有给出可用信息（{detail}），已填入模板，可自行修改";
+    readonly 'commit.done': "已提交 {hash}";
+    readonly 'commit.pushDone': "已提交并推送 {hash}";
+    readonly 'commit.pushFail': "已提交 {hash}，但推送失败";
+    readonly 'push.done': "已推送 {branch}";
+    readonly 'status.clean': "工作区干净";
+    readonly 'status.conflict': "有冲突文件";
+    readonly 'error.notRepository': "当前工作区不是 git 仓库";
+    readonly 'error.notInstalled': "本机没有可用的 git 命令";
+    readonly 'error.timeout': "git 命令超时";
+    readonly 'error.noRoute': "这个会话还没有模型路由，先发出一轮对话再试";
+    readonly 'error.detached': "当前处于游离 HEAD，先切到一个分支再操作";
+    readonly 'error.noFiles': "请至少勾选一个文件";
+    readonly 'error.invalid': "输入不合法：{detail}";
+    readonly 'error.failed': "操作失败：{detail}";
+};
+/** Both locales, in the shape `ctx.locale.register` validates. */
+export declare const gitFlowLocale: {
+    zh: {
+        readonly 'chip.tooltip': "当前分支 {branch}，{count} 个未提交改动";
+        readonly 'chip.tooltip.clean': "当前分支 {branch}，工作区干净";
+        readonly 'chip.aheadBehind': "领先 {ahead}，落后 {behind}";
+        readonly 'chip.unpushed': "有 {count} 个提交未推送";
+        readonly 'menu.search': "搜索分支";
+        readonly 'menu.local': "本地分支";
+        readonly 'menu.remote': "仅在远端";
+        readonly 'menu.empty': "没有匹配的分支";
+        readonly 'menu.loading': "读取分支…";
+        readonly 'menu.newBranch': "新建分支…";
+        readonly 'menu.commit': "提交…";
+        readonly 'menu.push': "推送提交";
+        readonly 'menu.refresh': "刷新状态";
+        readonly 'checkout.done': "已切换到 {branch}";
+        readonly 'checkout.dirtyTitle': "工作区有未提交改动";
+        readonly 'checkout.dirtyBody': "切换到 {branch} 会覆盖本地改动。可以先提交，或者强制切换（`git switch --force` 会丢弃全部本地改动）。";
+        readonly 'checkout.force': "强制切换";
+        readonly 'create.title': "新建分支";
+        readonly 'create.description': "基于当前分支 {branch} 创建并切换。";
+        readonly 'create.name': "分支名称";
+        readonly 'create.placeholder': "例如 feature/git-flow";
+        readonly 'create.submit': "创建并切换";
+        readonly 'create.done': "已创建并切换到 {branch}";
+        readonly 'commit.title': "提交改动";
+        readonly 'commit.description': "只提交勾选的文件；提交信息可由模型生成，也可以自己写。";
+        readonly 'commit.files': "改动文件";
+        readonly 'commit.selectAll': "全部 {count} 个文件";
+        readonly 'commit.message': "提交信息";
+        readonly 'commit.messageLanguage': "提交信息语言";
+        readonly 'commit.messagePlaceholder': "第一行写成 feat: 描述，空一行后可以补充要点";
+        readonly 'commit.generate': "生成提交信息";
+        readonly 'commit.regenerate': "重新生成";
+        readonly 'commit.generating': "正在生成…";
+        readonly 'commit.push': "推送";
+        readonly 'commit.commit': "提交";
+        readonly 'commit.commitPush': "提交并推送";
+        readonly 'commit.cancel': "取消";
+        readonly 'commit.none': "还没有勾选文件";
+        readonly 'commit.needMessage': "请先填写提交信息";
+        readonly 'commit.selected': "已选 {count} 个文件";
+        readonly 'commit.noUpstream': "当前分支还没有上游，首次推送会自动建立";
+        readonly 'commit.fallback': "模型没有给出可用信息，已填入模板，可自行修改";
+        readonly 'commit.staleHost': "语言选择没生效：宿主进程还是旧版本，重启 dsh web 后再试";
+        readonly 'commit.fallbackReason': "模型没有给出可用信息（{detail}），已填入模板，可自行修改";
+        readonly 'commit.done': "已提交 {hash}";
+        readonly 'commit.pushDone': "已提交并推送 {hash}";
+        readonly 'commit.pushFail': "已提交 {hash}，但推送失败";
+        readonly 'push.done': "已推送 {branch}";
+        readonly 'status.clean': "工作区干净";
+        readonly 'status.conflict': "有冲突文件";
+        readonly 'error.notRepository': "当前工作区不是 git 仓库";
+        readonly 'error.notInstalled': "本机没有可用的 git 命令";
+        readonly 'error.timeout': "git 命令超时";
+        readonly 'error.noRoute': "这个会话还没有模型路由，先发出一轮对话再试";
+        readonly 'error.detached': "当前处于游离 HEAD，先切到一个分支再操作";
+        readonly 'error.noFiles': "请至少勾选一个文件";
+        readonly 'error.invalid': "输入不合法：{detail}";
+        readonly 'error.failed': "操作失败：{detail}";
+    };
+    en: Record<"chip.tooltip" | "chip.tooltip.clean" | "chip.aheadBehind" | "chip.unpushed" | "menu.search" | "menu.local" | "menu.remote" | "menu.empty" | "menu.loading" | "menu.newBranch" | "menu.commit" | "menu.push" | "menu.refresh" | "checkout.done" | "checkout.dirtyTitle" | "checkout.dirtyBody" | "checkout.force" | "create.title" | "create.description" | "create.name" | "create.placeholder" | "create.submit" | "create.done" | "commit.title" | "commit.description" | "commit.files" | "commit.selectAll" | "commit.message" | "commit.messageLanguage" | "commit.messagePlaceholder" | "commit.generate" | "commit.regenerate" | "commit.generating" | "commit.push" | "commit.commit" | "commit.commitPush" | "commit.cancel" | "commit.none" | "commit.needMessage" | "commit.selected" | "commit.noUpstream" | "commit.fallback" | "commit.staleHost" | "commit.fallbackReason" | "commit.done" | "commit.pushDone" | "commit.pushFail" | "push.done" | "status.clean" | "status.conflict" | "error.notRepository" | "error.notInstalled" | "error.timeout" | "error.noRoute" | "error.detached" | "error.noFiles" | "error.invalid" | "error.failed", string>;
+};
+/** Every copy key of the `gitFlow` namespace. */
+export type GitFlowKey = keyof typeof zh;
+export {};

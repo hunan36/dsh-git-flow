@@ -107,12 +107,16 @@ src/
 ## 构建
 
 ```bash
-pnpm install     # 触发 prepare -> 自动构建
+pnpm install
 pnpm build       # tsc -> lib/types/**，tsdown -> lib/index.js + lib/client.js
 ```
 
-`lib/` 是产物、不进仓库（在 `.gitignore` 里），但 `package.json` 的 `files` 白名单让 `npm pack` / 从 git 安装时**会**带上它 ——
-配合 `prepare: npm run build`，`dsh plugin add https://github.com/hunan36/dsh-git-flow.git` 能装完即用（pnpm 会在装好后跑一次构建）。
+**`lib/` 随仓库一起提交**（不在 `.gitignore` 里），包内也不再有 `prepare` 脚本 —— 这样从 git 地址安装时不需要构建、不需要 devDependencies，也不需要把包加进 pnpm 的 `onlyBuiltDependencies` 白名单：
+
+- pnpm 10.34+ 会拦截 git 依赖的 `prepare`（`ERR_PNPM_GIT_DEP_PREPARE_NOT_ALLOWED`），而白名单必须写成 `dsh-git-flow@<地址>#<commit sha>` 这种**带 sha 的精确串**，上游每次提交都会失效；
+- 因此改成「产物入库、装上即用」：`dsh plugin add <地址>` 直接拿 `lib/`，实测 pnpm 10.34.5 下 263ms 装完。
+
+改完 `src/` 之后请**先 `pnpm build` 再提交**，把 `lib/` 一起带上（否则别人装到的是旧产物）。
 
 产物契约：
 

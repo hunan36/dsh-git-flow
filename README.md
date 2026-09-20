@@ -105,11 +105,16 @@ src/
 ## Build
 
 ```bash
-pnpm install     # runs prepare, which builds
+pnpm install
 pnpm build       # tsc -> lib/types/**, tsdown -> lib/index.js + lib/client.js
 ```
 
-`lib/` is a build artifact and stays out of the repository (it is in `.gitignore`), while the `files` whitelist in `package.json` still ships it to `npm pack` and to a git install. Together with `prepare: npm run build`, that makes `dsh plugin add https://github.com/hunan36/dsh-git-flow.git` work straight away: pnpm builds the package right after installing it.
+**`lib/` is committed to the repository** (it is not in `.gitignore`) and the package no longer carries a `prepare` script, so installing from the git URL needs no build, no dev dependencies, and no entry in pnpm's `onlyBuiltDependencies` allowlist:
+
+- pnpm 10.34+ blocks a git dependency's `prepare` (`ERR_PNPM_GIT_DEP_PREPARE_NOT_ALLOWED`), and the allowlist entry it demands is `dsh-git-flow@<spec>#<commit sha>` — a string that goes stale on every upstream commit;
+- shipping the build instead makes `dsh plugin add <spec>` take `lib/` as-is: measured at 263 ms under pnpm 10.34.5.
+
+After editing `src/`, run **`pnpm build` and commit `lib/` along with it**, or everyone installing from git gets the previous build.
 
 Artifact contract:
 
