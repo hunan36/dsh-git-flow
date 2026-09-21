@@ -16,12 +16,28 @@ composer tool row:  [⑂ feature/login  3]  ← click
 
 ## Install
 
+Two ways in; either one is enough.
+
+### From the plugin page (GUI)
+
+Sidebar → **Plugins** → **Add plugin**, then put this in "Package or address":
+
+```
+https://github.com/hunan36/dsh-git-flow
+```
+
+Press Install and enable it afterwards ("Enable"). That path runs `pnpm add <spec>` in **the profile serving the page** (usually `web`) and writes this package into `dsh.profile.bundles` for you — you do neither by hand. The URL is accepted with or without the `.git` suffix.
+
+**Reload the page** (⌘⇧R) afterwards so the browser fetches the new client bundle; if that profile does not have `patchReload: live`, restart `dsh web` once for the host side.
+
+### From the CLI (a dedicated profile is recommended)
+
 ```bash
 # 1. Create a dedicated profile (leaves your existing web profile alone)
 dsh --profile gitflow-web --from-default-profile web
 
 # 2. Add the plugin — a git URL, or the absolute path of a local checkout
-dsh plugin --profile gitflow-web add https://github.com/hunan36/dsh-git-flow.git
+dsh plugin --profile gitflow-web add https://github.com/hunan36/dsh-git-flow
 # dsh plugin --profile gitflow-web add "$PWD"
 
 # 3. Enable it on the plugin page ("Enable"), or edit the bundle list directly:

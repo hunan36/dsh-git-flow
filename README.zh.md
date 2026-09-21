@@ -16,12 +16,28 @@
 
 ## 安装
 
+两种方式，任选其一。
+
+### 方式一：插件页（GUI）
+
+界面左侧「插件」→ 右上「添加插件」→ 「包名或地址」填：
+
+```
+https://github.com/hunan36/dsh-git-flow
+```
+
+点「安装」，装好后在「已安装」里启用（立即启用）。插件页会在**它自己所在的 profile**（通常是 `web`）里执行 `pnpm add <地址>` 并把本包写进 `dsh.profile.bundles`，两条都不用你手动做。带不带 `.git` 后缀都认。
+
+装完**刷新一下页面**（⌘⇧R）让浏览器拉取新的前端 bundle；宿主侧若你的 profile 没开 `patchReload: live`，再重启一次 `dsh web`。
+
+### 方式二：命令行（推荐用独立 profile）
+
 ```bash
 # 1. 用一个独立 profile，别动现有 web profile
 dsh --profile gitflow-web --from-default-profile web
 
 # 2. 装本插件 —— 给 git 地址，或给本地克隆目录的绝对路径
-dsh plugin --profile gitflow-web add https://github.com/hunan36/dsh-git-flow.git
+dsh plugin --profile gitflow-web add https://github.com/hunan36/dsh-git-flow
 # dsh plugin --profile gitflow-web add "$PWD"
 
 # 3. 插件页「立即启用」，或直接在 profile 的 package.json 里加 bundle
