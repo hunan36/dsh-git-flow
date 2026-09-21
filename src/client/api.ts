@@ -5,6 +5,7 @@
 import type { TranslateNS } from '@deepseek-ai/dsh-client-ui-slots'
 import type {
   CheckoutRequest,
+  DiscardRequest,
   CreateBranchRequest,
   CommitRequest,
   GenerateMessageRequest,
@@ -106,6 +107,7 @@ export const gitApi = {
   checkout: (body: CheckoutRequest) => post<GitStatusView>('/checkout', body),
   createBranch: (body: CreateBranchRequest) => post<GitStatusView>('/branch', body),
   commit: (body: CommitRequest) => post<GitCommitView>('/commit', body),
+  discard: (body: DiscardRequest) => post<GitStatusView>('/discard', body),
   push: (body: { sessionId: string }) => post<GitPushView>('/push', body),
   generateMessage: (body: GenerateMessageRequest) => post<GitMessageView>('/generate-message', body),
 }

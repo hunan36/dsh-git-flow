@@ -47,6 +47,12 @@ declare const zh: {
     readonly 'commit.commit': "提交";
     readonly 'commit.commitPush': "提交并推送";
     readonly 'commit.cancel': "取消";
+    readonly 'commit.discard': "放弃更改";
+    readonly 'commit.discardTitle': "放弃这些文件的改动？";
+    readonly 'commit.discardBody': "将把 {count} 个文件恢复到 HEAD：已跟踪的改动被丢弃，未跟踪的文件会被删除。此操作无法撤销。";
+    readonly 'commit.discardDone': "已放弃 {count} 个文件的改动";
+    readonly 'commit.discardOne': "放弃「{path}」的改动";
+    readonly 'commit.resize': "拖动调整面板宽度";
     readonly 'commit.none': "还没有勾选文件";
     readonly 'commit.needMessage': "请先填写提交信息";
     readonly 'commit.selected': "已选 {count} 个文件";
@@ -109,6 +115,12 @@ export declare const gitFlowLocale: {
         readonly 'commit.commit': "提交";
         readonly 'commit.commitPush': "提交并推送";
         readonly 'commit.cancel': "取消";
+        readonly 'commit.discard': "放弃更改";
+        readonly 'commit.discardTitle': "放弃这些文件的改动？";
+        readonly 'commit.discardBody': "将把 {count} 个文件恢复到 HEAD：已跟踪的改动被丢弃，未跟踪的文件会被删除。此操作无法撤销。";
+        readonly 'commit.discardDone': "已放弃 {count} 个文件的改动";
+        readonly 'commit.discardOne': "放弃「{path}」的改动";
+        readonly 'commit.resize': "拖动调整面板宽度";
         readonly 'commit.none': "还没有勾选文件";
         readonly 'commit.needMessage': "请先填写提交信息";
         readonly 'commit.selected': "已选 {count} 个文件";
@@ -131,7 +143,7 @@ export declare const gitFlowLocale: {
         readonly 'error.invalid': "输入不合法：{detail}";
         readonly 'error.failed': "操作失败：{detail}";
     };
-    en: Record<"chip.tooltip" | "chip.tooltip.clean" | "chip.aheadBehind" | "chip.unpushed" | "menu.search" | "menu.local" | "menu.remote" | "menu.empty" | "menu.loading" | "menu.newBranch" | "menu.commit" | "menu.push" | "menu.refresh" | "checkout.done" | "checkout.dirtyTitle" | "checkout.dirtyBody" | "checkout.force" | "create.title" | "create.description" | "create.name" | "create.placeholder" | "create.submit" | "create.done" | "commit.title" | "commit.description" | "commit.files" | "commit.selectAll" | "commit.message" | "commit.messageLanguage" | "commit.messagePlaceholder" | "commit.generate" | "commit.regenerate" | "commit.generating" | "commit.push" | "commit.commit" | "commit.commitPush" | "commit.cancel" | "commit.none" | "commit.needMessage" | "commit.selected" | "commit.noUpstream" | "commit.fallback" | "commit.staleHost" | "commit.fallbackReason" | "commit.done" | "commit.pushDone" | "commit.pushFail" | "push.done" | "status.clean" | "status.conflict" | "error.notRepository" | "error.notInstalled" | "error.timeout" | "error.noRoute" | "error.detached" | "error.noFiles" | "error.invalid" | "error.failed", string>;
+    en: Record<"chip.tooltip" | "chip.tooltip.clean" | "chip.aheadBehind" | "chip.unpushed" | "menu.search" | "menu.local" | "menu.remote" | "menu.empty" | "menu.loading" | "menu.newBranch" | "menu.commit" | "menu.push" | "menu.refresh" | "checkout.done" | "checkout.dirtyTitle" | "checkout.dirtyBody" | "checkout.force" | "create.title" | "create.description" | "create.name" | "create.placeholder" | "create.submit" | "create.done" | "commit.title" | "commit.description" | "commit.files" | "commit.selectAll" | "commit.message" | "commit.messageLanguage" | "commit.messagePlaceholder" | "commit.generate" | "commit.regenerate" | "commit.generating" | "commit.push" | "commit.commit" | "commit.commitPush" | "commit.cancel" | "commit.discard" | "commit.discardTitle" | "commit.discardBody" | "commit.discardDone" | "commit.discardOne" | "commit.resize" | "commit.none" | "commit.needMessage" | "commit.selected" | "commit.noUpstream" | "commit.fallback" | "commit.staleHost" | "commit.fallbackReason" | "commit.done" | "commit.pushDone" | "commit.pushFail" | "push.done" | "status.clean" | "status.conflict" | "error.notRepository" | "error.notInstalled" | "error.timeout" | "error.noRoute" | "error.detached" | "error.noFiles" | "error.invalid" | "error.failed", string>;
 };
 /** Every copy key of the `gitFlow` namespace. */
 export type GitFlowKey = keyof typeof zh;

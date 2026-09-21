@@ -64,6 +64,15 @@ export declare class GitFlow extends Service {
      */
     createBranch(sessionId: string, name: string, base?: string): Promise<GitStatusView>;
     /**
+     * Throw away the worktree and index changes for the selected paths: tracked
+     * paths go back to HEAD (a staged addition is removed from the index and from
+     * disk), and untracked paths are deleted. Destructive by definition, so the
+     * caller confirms first; conflicted paths are refused rather than guessed at.
+     * @param sessionId - session whose workspace backs the repository.
+     * @param files - paths as reported by {@link status}; anything else is rejected.
+     */
+    discard(sessionId: string, files: readonly string[]): Promise<GitStatusView>;
+    /**
      * Stage exactly the selected paths, commit them, and optionally push.
      * @param sessionId - session whose workspace backs the repository.
      * @param files - paths as reported by {@link status}; anything else is rejected.

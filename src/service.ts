@@ -182,6 +182,36 @@ export class GitFlow extends Service {
   }
 
   /**
+   * Throw away the worktree and index changes for the selected paths: tracked
+   * paths go back to HEAD (a staged addition is removed from the index and from
+   * disk), and untracked paths are deleted. Destructive by definition, so the
+   * caller confirms first; conflicted paths are refused rather than guessed at.
+   * @param sessionId - session whose workspace backs the repository.
+   * @param files - paths as reported by {@link status}; anything else is rejected.
+   */
+  async discard(sessionId: string, files: readonly string[]): Promise<GitStatusView> {
+    const status = await this.status(sessionId)
+    const selected = selectPaths(status.files, files)
+    const byPath = new Map(status.files.map((file) => [file.path, file]))
+    const conflicted = selected.filter((path) => byPath.get(path)?.conflicted === true)
+    if (conflicted.length > 0) {
+      throw new GitError('git/invalid-input', `${conflicted[0]} has an unresolved conflict; resolve it first`)
+    }
+    // Untracked paths have nothing to restore from, and `git restore` refuses
+    // them outright; the rest (including a rename's both sides) go to HEAD.
+    const untracked = selected.filter((path) => byPath.get(path)?.untracked === true)
+    const tracked = selected.filter((path) => byPath.get(path)?.untracked !== true)
+    if (tracked.length > 0) {
+      await this.git.runOk(status.repo, ['restore', '--source=HEAD', '--staged', '--worktree', '--', ...tracked])
+    }
+    // -d so an untracked directory goes with its contents; ignored files stay.
+    if (untracked.length > 0) {
+      await this.git.runOk(status.repo, ['clean', '-fd', '--', ...untracked])
+    }
+    return this.status(sessionId)
+  }
+
+  /**
    * Stage exactly the selected paths, commit them, and optionally push.
    * @param sessionId - session whose workspace backs the repository.
    * @param files - paths as reported by {@link status}; anything else is rejected.

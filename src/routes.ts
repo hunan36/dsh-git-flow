@@ -48,6 +48,11 @@ export function registerGitFlowRoutes(ctx: Context, service: GitFlow): () => voi
       const { sessionId, files, message, push } = readBody(body)
       return service.commit(sessionId, stringArray(files, 'files'), requireString(message, 'message'), push === true)
     }) }),
+    ctx.webServer.register({ kind: 'exact', path: `${BASE}/discard`, handler: (req, res) => handle(req, res, async (body) => {
+      requireMethod(req, 'POST')
+      const { sessionId, files } = readBody(body)
+      return service.discard(sessionId, stringArray(files, 'files'))
+    }) }),
     ctx.webServer.register({ kind: 'exact', path: `${BASE}/push`, handler: (req, res) => handle(req, res, async (body) => {
       requireMethod(req, 'POST')
       const { sessionId } = readBody(body)

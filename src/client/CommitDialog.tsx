@@ -4,11 +4,18 @@
  * Every mutation goes through `/api/dsh-git-flow/*`, which names only the session.
  */
 import { useEffect, useState } from 'react'
-import type { CSSProperties } from 'react'
-import { Button, Checkbox, IconBranchOutline16, IconRefreshOutline14, IconSparkle16, IconWarningOutline16, Input, Modal, Pill, Tooltip } from '@deepseek-ai/dsh-client-ui-primitives'
+import type { CSSProperties, PointerEvent as ReactPointerEvent } from 'react'
+import { Button, Checkbox, IconRefreshOutline14, IconSparkle16, IconTrashOutline16, IconWarningOutline16, Input, Modal, Pill, Tooltip } from '@deepseek-ai/dsh-client-ui-primitives'
 import type { TranslateNS } from '@deepseek-ai/dsh-client-ui-slots'
 import type { GitFileView, GitStatusView, MessageLanguage } from '../contract.ts'
 import { errorText, gitApi, isStaleSelection } from './api.ts'
+
+/** Custom property and storage key behind the drag-to-resize width. */
+const DIALOG_WIDTH_VAR = '--dsh-git-flow-dialog-width'
+const DIALOG_WIDTH_KEY = 'dsh-git-flow:dialog-width'
+/** Bounds for the dragged width, in px. */
+const WIDTH_MIN = 380
+const WIDTH_MAX = 1100
 
 /** Languages the panel offers, in display order. */
 const LANGUAGES: readonly MessageLanguage[] = ['en', 'zh']
@@ -48,6 +55,8 @@ export function CommitDialog(props: CommitDialogProps) {
   const [generating, setGenerating] = useState(false)
   const [busy, setBusy] = useState(false)
   const [language, setLanguage] = useState<MessageLanguage>(readLanguage)
+  /** Paths awaiting the destructive-action confirmation. */
+  const [discard, setDiscard] = useState<string[] | undefined>(undefined)
   const paths = stageable.filter((file) => chosen.has(file.path)).map((file) => file.path)
   const allSelected = stageable.length > 0 && paths.length === stageable.length
   const signature = stageable.map((file) => file.path).join('\n')
@@ -156,9 +165,11 @@ export function CommitDialog(props: CommitDialogProps) {
   }
 
   return (
+    <>
     <Modal
       open
       onClose={onClose}
+      className="dsh-git-flow-dialog"
       title={t('commit.title')}
       description={t('commit.description')}
       closeLabel={t('commit.cancel')}
@@ -182,6 +193,7 @@ export function CommitDialog(props: CommitDialogProps) {
         </div>
       )}
     >
+      <ResizeHandle label={t('commit.resize')} />
       <section style={sectionStyle}>
         <header style={rowHeaderStyle}>
           <span style={headingStyle}>{t('commit.message')}</span>
@@ -242,16 +254,29 @@ export function CommitDialog(props: CommitDialogProps) {
               title={file.conflicted ? t('status.conflict') : file.path}
               checked={chosen.has(file.path)}
               disabled={file.conflicted || busy}
+              discardLabel={t('commit.discardOne', { path: file.path })}
               onToggle={() => { toggle(file.path) }}
+              onDiscard={() => { setDiscard([file.path]) }}
             />
           ))}
         </div>
       </section>
     </Modal>
+    {discard !== undefined && (
+      <DiscardDialog
+        t={t}
+        sessionId={sessionId}
+        files={discard}
+        notify={props.notify}
+        refresh={props.refresh}
+        onClose={() => { setDiscard(undefined) }}
+      />
+    )}
+    </>
   )
 }
 
-/** One changed path: its checkbox, the path as its label, and a status badge. */
+/** One changed path: checkbox, single-line path, status badge, discard action. */
 function FileRow(props: {
   path: string
   code: string
@@ -259,27 +284,149 @@ function FileRow(props: {
   title: string
   checked: boolean
   disabled: boolean
+  discardLabel: string
   onToggle: () => void
+  onDiscard: () => void
 }) {
   const [hover, setHover] = useState(false)
   return (
     <div
+      className="dsh-git-flow-file-row"
       style={{ ...fileRowStyle, ...(hover && !props.disabled ? rowHoverStyle : null) }}
       onPointerEnter={() => { setHover(true) }}
       onPointerLeave={() => { setHover(false) }}
     >
-      <span style={checkboxWrapStyle}>
-        <Checkbox
-          checked={props.checked}
-          onChange={props.onToggle}
-          label={props.path}
-          title={props.title}
-          disabled={props.disabled}
-        />
-      </span>
+      <Checkbox
+        className="dsh-git-flow-file-label"
+        checked={props.checked}
+        onChange={props.onToggle}
+        label={props.path}
+        title={props.title}
+        disabled={props.disabled}
+      />
       <span style={{ ...badgeStyle, color: props.tone }}>{props.code}</span>
+      {!props.disabled && (
+        <Tooltip label={props.discardLabel}>
+          <button
+            type="button"
+            className="dsh-git-flow-file-action"
+            style={iconButtonStyle}
+            aria-label={props.discardLabel}
+            onClick={props.onDiscard}
+          >
+            <IconTrashOutline16 size={14} />
+          </button>
+        </Tooltip>
+      )}
     </div>
   )
+}
+
+/**
+ * Right-edge gripper for the dialog card. The card owns its width through the
+ * `--dsh-git-flow-dialog-width` custom property (see styles.ts), so the drag
+ * only has to write that property; the chosen width is remembered per browser.
+ */
+function ResizeHandle(props: { label: string }) {
+  const [dragging, setDragging] = useState(false)
+
+  useEffect(() => {
+    const stored = window.localStorage.getItem(DIALOG_WIDTH_KEY)
+    if (stored !== null) document.documentElement.style.setProperty(DIALOG_WIDTH_VAR, stored)
+  }, [])
+
+  const onPointerDown = (event: ReactPointerEvent<HTMLSpanElement>) => {
+    const handle = event.currentTarget
+    const card = handle.closest('.dsh-git-flow-dialog')
+    if (!(card instanceof HTMLElement)) return
+    event.preventDefault()
+    const startX = event.clientX
+    const startWidth = card.offsetWidth
+    const target = handle as HTMLElement
+    target.setPointerCapture(event.pointerId)
+    setDragging(true)
+    let width = startWidth
+    const move = (moveEvent: PointerEvent) => {
+      const limit = Math.min(WIDTH_MAX, window.innerWidth - 48)
+      width = Math.min(Math.max(startWidth + (moveEvent.clientX - startX), WIDTH_MIN), Math.max(WIDTH_MIN, limit))
+      document.documentElement.style.setProperty(DIALOG_WIDTH_VAR, `${width}px`)
+    }
+    const up = () => {
+      target.releasePointerCapture(event.pointerId)
+      target.removeEventListener('pointermove', move)
+      target.removeEventListener('pointerup', up)
+      target.removeEventListener('pointercancel', up)
+      setDragging(false)
+      window.localStorage.setItem(DIALOG_WIDTH_KEY, `${width}px`)
+    }
+    target.addEventListener('pointermove', move)
+    target.addEventListener('pointerup', up)
+    target.addEventListener('pointercancel', up)
+  }
+
+  return (
+    <Tooltip label={props.label}>
+      <span
+        className="dsh-git-flow-resize"
+        role="separator"
+        aria-label={props.label}
+        aria-orientation="vertical"
+        data-dragging={dragging ? 'true' : undefined}
+        onPointerDown={onPointerDown}
+        onDoubleClick={() => {
+          // Doubling up resets to the default width.
+          document.documentElement.style.removeProperty(DIALOG_WIDTH_VAR)
+          window.localStorage.removeItem(DIALOG_WIDTH_KEY)
+        }}
+      />
+    </Tooltip>
+  )
+}
+
+/**
+ * Confirmation for a destructive discard. Nothing is sent until the user picks
+ * the destructive action here.
+ */
+export function DiscardDialog(props: DiscardDialogProps) {
+  const { t, sessionId, files, onClose } = props
+  const [busy, setBusy] = useState(false)
+
+  const discard = async () => {
+    setBusy(true)
+    try {
+      await gitApi.discard({ sessionId, files })
+      props.notify(t('commit.discardDone', { count: files.length }))
+      props.refresh()
+      onClose()
+    } catch (error) {
+      props.notify(errorText(t, error), true)
+      setBusy(false)
+    }
+  }
+
+  return (
+    <Modal
+      open
+      onClose={onClose}
+      title={t('commit.discardTitle')}
+      description={t('commit.discardBody', { count: files.length })}
+      closeLabel={t('commit.cancel')}
+      footer={(
+        <div style={actionsStyle}>
+          <Button size="sm" onClick={onClose} disabled={busy}>{t('commit.cancel')}</Button>
+          <Button size="sm" variant="primary" icon={<IconWarningOutline16 size={14} />} onClick={() => { void discard() }} disabled={busy}>
+            {t('commit.discard')}
+          </Button>
+        </div>
+      )}
+    />
+  )
+}
+
+/** Discard dialog props. */
+export interface DiscardDialogProps extends DialogHost {
+  files: string[]
+  onClose: () => void
 }
 
 /** Commit dialog props. */
@@ -431,7 +578,20 @@ const fileRowStyle: CSSProperties = {
   borderRadius: 6,
 }
 const rowHoverStyle: CSSProperties = { background: 'var(--dsw-alias-bg-layer-2, rgba(127,127,127,0.10))' }
-const checkboxWrapStyle: CSSProperties = { display: 'flex', alignItems: 'center', minWidth: 0, overflow: 'hidden' }
+const iconButtonStyle: CSSProperties = {
+  display: 'inline-flex',
+  alignItems: 'center',
+  justifyContent: 'center',
+  flex: '0 0 auto',
+  width: 22,
+  height: 22,
+  padding: 0,
+  border: 'none',
+  borderRadius: 6,
+  background: 'transparent',
+  color: 'var(--dsw-alias-label-tertiary, currentColor)',
+  cursor: 'pointer',
+}
 const badgeStyle: CSSProperties = {
   flex: '0 0 auto',
   minWidth: 22,

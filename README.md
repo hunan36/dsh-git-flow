@@ -2,7 +2,7 @@
 
 English | [中文](README.zh.md)
 
-**Version 0.1.0-rc.4** (pre-release) — a DeepSeek Harness workspace git plugin: a branch chip in the composer tool row. Open it to browse branches, switch branches, create one, and commit a checked subset of files — the commit message is written by the session's own model from the diff.
+**Version 0.2.0-rc.1** (pre-release) — a DeepSeek Harness workspace git plugin: a branch chip in the composer tool row. Open it to browse branches, switch branches, create one, and commit a checked subset of files — the commit message is written by the session's own model from the diff.
 
 ```
 composer tool row:  [⑂ feature/login  3]  ← click
@@ -51,6 +51,49 @@ dsh --profile gitflow-web
 
 The `headless` profile installs too, but it has no `webServer`: no `/api/dsh-git-flow/*` route is registered, the browser half does not exist there, and boot reports no error.
 
+### A machine without pnpm
+
+dsh's plugin management — the plugin page's Install, and `dsh plugin …` — shells out to pnpm, and fails outright when there is none:
+
+```
+dsh: pnpm was not found; install pnpm and make it available on PATH.
+```
+
+Install one (Node ships npm):
+
+```bash
+npm install -g pnpm        # the latest 10.x
+# or: corepack enable && corepack prepare pnpm@10 --activate
+```
+
+Do not let Corepack use its own default: after a bare `corepack enable` you get pnpm **8.15.7**, which walks straight into the `ERR_PNPM_ADDING_TO_ROOT` failure below.
+
+If you would rather not install pnpm at all, the plugin itself does not need it (its `dependencies` are empty):
+
+- **Use Node's npm**: `cd ~/.dsh/profiles/<profile> && npm install https://github.com/hunan36/dsh-git-flow`
+- **Copy the directory**: drop the whole `dsh-git-flow` folder (including `lib/`) into `<profile>/node_modules/`, for offline or fully manual setups
+
+Both need one extra step: add `dsh-git-flow` to that profile's `dsh.profile.bundles` in its `package.json`, then restart `dsh web`. The plugin page and `dsh plugin add` do that for you; a manual install does not, and the package stays unloaded even though it sits in `node_modules`.
+
+### Point the plugin page at npm (a machine that only has npm)
+
+The plugin page runs `pnpm add <spec>` by default, but the plugin manager's command is configurable — set it to `npm` in the profile's `cordis.patch.yml` and the page installs with npm:
+
+```yaml
+# ~/.dsh/profiles/<profile>/cordis.patch.yml
+- id: plugin-manager
+  config:
+    pnpmCommand: npm
+```
+
+Then use the plugin page exactly as usual (paste the address → Install → Enable). The CLI's `dsh plugin … add` does **not** honour this setting and still needs pnpm.
+
+Three caveats:
+
+- This is an internal dsh setting and may move between versions; prefer installing pnpm when the machine allows it.
+- The arguments dsh passes are `add <spec>`, `remove <name>`, and `view <spec> … --json`, all of which npm accepts; but pnpm-specific semantics (`-w`, `onlyBuiltDependencies`, lockfiles) do not exist under npm, so **do not mix both managers in one profile**.
+- The command line shown in the UI and logs still reads `pnpm add …` (dsh builds that label literally). To tell which manager really ran, look for `package-lock.json` versus `pnpm-lock.yaml` in the profile directory.
+
 ### Installation fails with ERR_PNPM_ADDING_TO_ROOT
 
 A dsh profile directory is itself a pnpm workspace (`pnpm-workspace.yaml` with `packages: [.]`), and pnpm 8 treats `pnpm add` there as adding to a workspace root — which it refuses. When the profile has no `packageManager` field, Node's Corepack fills one in (commonly `pnpm@8.15.7`), and the install then dies on that check **before it ever resolves this plugin**, so the failure is not about this package.
@@ -95,7 +138,8 @@ The commit panel carries an `English | 中文` switch beside "Draft message". It
 - Arguments are always an array, never a shell string, with `stdin: 'ignore'` and `GIT_TERMINAL_PROMPT=0`, so a credential prompt can never hang a call.
 - `push` never passes `--force` or `--force-with-lease`, and only pushes the current branch's upstream (with `--set-upstream <remote> HEAD:refs/heads/<branch>` when it has none).
 - Commits stage only the files checked in the panel. An empty selection answers `git/no-files-selected` and never falls back to an implicit `git add -A`.
-- Switching branches on a dirty worktree fails by default (`git/dirty-worktree`). Only the user's second confirmation in the dialog sends `--force`; nothing in the plugin discards changes silently.
+- Switching branches on a dirty worktree fails by default (`git/dirty-worktree`). Only the user's second confirmation in the dialog sends `--force`.
+- Discarding runs only after the destructive action is picked in a confirmation dialog: tracked paths go back to HEAD with `git restore --source=HEAD --staged --worktree`, untracked paths are removed with `git clean -fd` (no `-x`, so ignored files stay), and a conflicted path is refused rather than guessed at.
 - `workspaceRegistry` is read lazily through `ctx.get('workspaceRegistry')` instead of being declared in `static inject`, so a profile without one (the shipped `headless` profile) still activates this entry rather than leaving a permanently pending plugin; every git call there answers `git/not-a-repository`.
 - A missing git, a non-repository workspace, a timeout, and every refusal travel as structured codes (`git/not-installed`, `git/not-a-repository`, `git/timeout`, …) that the UI renders as copy. Outside a repository — or without git — the chip renders nothing at all.
 
@@ -104,7 +148,7 @@ The commit panel carries an `English | 中文` switch beside "Draft message". It
 ```
 src/
 ├── index.ts       host entry (default-exports the GitFlow service)
-├── service.ts     GitFlow: status / branches / checkout / createBranch / commit / push / generateMessage
+├── service.ts     GitFlow: status / branches / checkout / createBranch / commit / discard / push / generateMessage
 ├── git.ts         GitRunner: subprocess + scrubbed env + timeout + porcelain v2 parsing
 ├── routes.ts      /api/dsh-git-flow/* (registered only where a webServer exists)
 ├── message.ts     commit message: ctx.llm.stream on the session's own provider/model, template fallback
@@ -113,8 +157,9 @@ src/
     ├── index.ts        slots.inject('conversation.input.left') + locale registration
     ├── BranchChip.tsx  container: status, menu, dialogs, toast
     ├── BranchMenu.tsx  the chip and its anchored menu
-    ├── CommitDialog.tsx commit panel / new branch / forced-switch confirmation
+    ├── CommitDialog.tsx commit panel / new branch / forced-switch and discard confirmations
     ├── api.ts          fetch wrapper + error codes to copy
+    ├── styles.ts       the few CSS rules the popover width and file-row ellipsis need
     └── locales.ts      zh/en dictionaries (en is typed against zh, so a missing key is a compile error)
 ```
 
@@ -147,7 +192,7 @@ Developed and verified against `@deepseek-ai/dsh@0.1.6-alpha.2`, with peer and d
 - Messages default to English. The panel's language switch (remembered per browser) and the `messageLanguage` config are the only two inputs; the template fallback follows the same choice.
 - Remote branches appear only once `refs/remotes/**` exists locally (the plugin never fetches in the background); "Refresh status" makes no network call.
 - Conflicted files cannot be checked; resolve the conflict in the conversation first.
-- `git switch --force` discards **all** local changes, not just the conflicting ones — the confirmation copy says exactly that — and the plugin offers no per-file discard.
+- `git switch --force` discards **all** local changes, not just the conflicting ones — the confirmation copy says exactly that. To drop a single file's changes instead, use that file's Discard action in the commit panel.
 - Switching to a ref that exists nowhere fails inside git and is reported as `git/failed` with git's own text. Only stale UI state can reach that path, since the menu lists branches that exist.
 
 ## Verification (0.1.6-alpha.2)

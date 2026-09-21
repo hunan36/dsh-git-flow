@@ -11,6 +11,16 @@ export interface DialogHost {
 }
 /** Commit composer: pick paths, draft or write the message, commit, optionally push. */
 export declare function CommitDialog(props: CommitDialogProps): import("react").JSX.Element;
+/**
+ * Confirmation for a destructive discard. Nothing is sent until the user picks
+ * the destructive action here.
+ */
+export declare function DiscardDialog(props: DiscardDialogProps): import("react").JSX.Element;
+/** Discard dialog props. */
+export interface DiscardDialogProps extends DialogHost {
+    files: string[];
+    onClose: () => void;
+}
 /** Commit dialog props. */
 export interface CommitDialogProps extends DialogHost {
     status: GitStatusView;

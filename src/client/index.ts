@@ -14,6 +14,7 @@ import type {} from '@deepseek-ai/dsh-client-ui-conversation/client'
 import type {} from '@deepseek-ai/dsh-client-ui-session/client'
 import { GitFlowChip } from './BranchChip.tsx'
 import { GIT_FLOW_NS, gitFlowLocale } from './locales.ts'
+import { installStyles } from './styles.ts'
 
 /** Services this fiber needs before it activates. */
 export const inject = ['slots', 'locale']
@@ -24,6 +25,7 @@ export const inject = ['slots', 'locale']
  */
 export function apply(ctx: Context): void {
   ctx.effect(() => ctx.locale.register(GIT_FLOW_NS, gitFlowLocale), 'dsh-git-flow: locale dictionary')
+  ctx.effect(installStyles, 'dsh-git-flow: stylesheet')
   // `inject` waits for the slot's declaration and re-runs after a collapse,
   // so registration order against the conversation shell does not matter.
   ctx.slots.inject('conversation.input.left', () => ctx.slots.register({

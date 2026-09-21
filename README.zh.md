@@ -2,7 +2,7 @@
 
 [English](README.md) | 中文
 
-**版本 0.1.0-rc.4**（预发布）—— DeepSeek Harness 工作区 Git 插件：在输入框工具行放一个分支胶囊，点开能看分支、切分支、新建分支，并在面板里勾选文件提交 —— 提交信息由当前会话的模型根据改动自动生成。
+**版本 0.2.0-rc.1**（预发布）—— DeepSeek Harness 工作区 Git 插件：在输入框工具行放一个分支胶囊，点开能看分支、切分支、新建分支，并在面板里勾选文件提交 —— 提交信息由当前会话的模型根据改动自动生成。
 
 ```
 输入框工具行:  [⑂ feature/login  3]  ← 点击
@@ -50,6 +50,49 @@ dsh --profile gitflow-web
 
 headless profile 也能装，但没有 `webServer`，`/api/dsh-git-flow/*` 不会注册，浏览器半也不存在 —— 不会报错。
 
+### 机器上没有 pnpm
+
+dsh 的插件管理（插件页的「安装」和 `dsh plugin …`）底层调用 pnpm，机器上没有时会直接失败：
+
+```
+dsh: pnpm was not found; install pnpm and make it available on PATH.
+```
+
+装一个就好（Node 自带 npm）：
+
+```bash
+npm install -g pnpm        # 装最新的 10.x
+# 或者：corepack enable && corepack prepare pnpm@10 --activate
+```
+
+注意别让 Corepack 用它的默认版本 —— `corepack enable` 之后直接跑拿到的是 pnpm **8.15.7**，会踩下面那个 `ERR_PNPM_ADDING_TO_ROOT`。
+
+不想装 pnpm 也有两条路，插件本身不依赖它（包内 `dependencies` 为空）：
+
+- **用 Node 自带的 npm**：`cd ~/.dsh/profiles/<profile> && npm install https://github.com/hunan36/dsh-git-flow`
+- **直接拷贝**：把整个 `dsh-git-flow` 目录（含 `lib/`）拷进 `<profile>/node_modules/`，适用于离线或纯手工环境
+
+这两种方式都必须**再补一步**：把 `dsh-git-flow` 加进该 profile `package.json` 的 `dsh.profile.bundles`，然后重启 `dsh web` —— 插件页和 `dsh plugin add` 会自动做这一步，手工装则要自己写，否则包在 `node_modules` 里也不会被加载。
+
+### 让插件页改用 npm（机器上只有 npm）
+
+dsh 的插件页默认执行 `pnpm add <地址>`，但插件管理器的命令是可配置的 —— 在 profile 的 `cordis.patch.yml` 里改成 `npm`，插件页就会用 npm 安装：
+
+```yaml
+# ~/.dsh/profiles/<profile>/cordis.patch.yml
+- id: plugin-manager
+  config:
+    pnpmCommand: npm
+```
+
+之后按方式一正常操作（填地址 → 安装 → 立即启用）即可。命令行的 `dsh plugin … add` **不吃**这个配置，仍然需要 pnpm。
+
+三点提醒：
+
+- 这属于 dsh 的内部配置项，随版本可能变动；机器上能装 pnpm 时，优先装 pnpm。
+- dsh 传给它的参数是 `add <spec>` / `remove <name>` / `view <spec> … --json`，npm 都支持；但 pnpm 专有语义（`-w`、`onlyBuiltDependencies`、lockfile）在 npm 下不存在，**同一个 profile 别混用两种管理器**。
+- 界面与日志里那条命令仍会显示成 `pnpm add …`（dsh 的日志标题是写死的），判断实际用的是谁，看 profile 目录里留的是 `package-lock.json` 还是 `pnpm-lock.yaml`。
+
 ### 安装报错：ERR_PNPM_ADDING_TO_ROOT
 
 dsh 的 profile 目录本身就是一个 pnpm workspace（`pnpm-workspace.yaml` 里 `packages: [.]`），而 pnpm 8 会把 `pnpm add` 当成「往 workspace 根加依赖」直接拒绝。profile 的 `package.json` 没有 `packageManager` 字段时，Node 自带的 Corepack 会自动补一个（常见是 `pnpm@8.15.7`），于是安装卡在这个检查上 —— 它发生在 pnpm 解析本插件**之前**，与本插件无关。
@@ -95,7 +138,8 @@ dsh 的 profile 目录本身就是一个 pnpm workspace（`pnpm-workspace.yaml` 
 - 参数永远是数组，从不拼 shell 字符串；`stdin: 'ignore'`，`GIT_TERMINAL_PROMPT=0`，不会卡在凭据提示上。
 - `push` 永不带 `--force` / `--force-with-lease`，只推当前分支的上游（无上游时 `--set-upstream <remote> HEAD:refs/heads/<branch>`）。
 - 提交只 `git add` 面板里勾选的文件；一个都没勾返回 `git/no-files-selected`，绝不隐式 `git add -A`。
-- 脏工作区切分支默认失败（`git/dirty-worktree`），只有用户在二次确认框里点「强制切换」才带 `--force`；插件不提供悄悄丢弃改动的入口。
+- 脏工作区切分支默认失败（`git/dirty-worktree`），只有用户在二次确认框里点「强制切换」才带 `--force`。
+- 放弃更改只在确认框里点了「放弃更改」才执行：已跟踪路径用 `git restore --source=HEAD --staged --worktree` 回到 HEAD，未跟踪路径用 `git clean -fd` 删除（不带 `-x`，被忽略的文件不动）；有冲突的文件直接拒绝，不做猜测。
 - `workspaceRegistry` 用 `ctx.get('workspaceRegistry')` 惰性读取，而不是写进 `static inject`：headless 之类的 profile 没有它，
   插件仍然激活（不会留下 "entry did not activate" 警告），此时任何 git 调用返回 `git/not-a-repository`。
 - 没装 git、不是仓库、超时、以及每一次拒绝都走结构化错误码（`git/not-installed` / `git/not-a-repository` / `git/timeout` / …），
@@ -106,7 +150,7 @@ dsh 的 profile 目录本身就是一个 pnpm workspace（`pnpm-workspace.yaml` 
 ```
 src/
 ├── index.ts       宿主半入口（默认导出 GitFlow 服务）
-├── service.ts     GitFlow：status / branches / checkout / createBranch / commit / push / generateMessage
+├── service.ts     GitFlow：status / branches / checkout / createBranch / commit / discard / push / generateMessage
 ├── git.ts         GitRunner：subprocess + 净化 env + 超时 + porcelain v2 解析
 ├── routes.ts      /api/dsh-git-flow/*（仅挂载在有 webServer 的 profile）
 ├── message.ts     提交信息：ctx.llm.stream 走会话自己的 provider/model，失败退模板
@@ -115,8 +159,9 @@ src/
     ├── index.ts       slots.inject('conversation.input.left') + locale 注册
     ├── BranchChip.tsx 状态、菜单、弹窗、toast 的容器
     ├── BranchMenu.tsx 分支胶囊 + 锚定菜单
-    ├── CommitDialog.tsx 提交面板 / 新建分支 / 强制切换确认
+    ├── CommitDialog.tsx 提交面板 / 新建分支 / 强制切换与放弃更改的确认
     ├── api.ts         fetch 包装 + 错误码到文案
+    ├── styles.ts      弹层宽度、文件行省略所需的少量 CSS（唯一需要真 CSS 的地方）
     └── locales.ts     zh/en 字典（en 按 zh 收窄，缺键即编译错误）
 ```
 
@@ -152,7 +197,7 @@ pnpm build       # tsc -> lib/types/**，tsdown -> lib/index.js + lib/client.js
 - 提交信息默认英文。只有两个入口能改：面板里的语言切换（按浏览器记住）和 `messageLanguage` 配置；模板兜底跟随同一个选择。
 - 远端分支只在本地已有 `refs/remotes/**` 时才可见（插件不做后台 fetch）；「刷新状态」不触发网络。
 - 冲突文件不可勾选，需要先在对话里解决冲突。
-- `git switch --force` 会丢弃**全部**本地改动（不只是冲突的那些），确认框里的文案就是这么写的；插件不提供单独丢弃某个改动的入口。
+- `git switch --force` 会丢弃**全部**本地改动（不只是冲突的那些），确认框里的文案就是这么写的；只想丢掉某一个文件的改动，用提交面板里该文件的「放弃更改」。
 - 切到一个不存在且无同名远端的引用时，git 自己会失败，条目按 `git/failed` 上报 git 原文（这种情况只能来自过期的 UI 状态，正常菜单里列的都是真实存在的分支）。
 
 ## 验证记录（0.1.6-alpha.2）

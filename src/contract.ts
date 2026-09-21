@@ -124,6 +124,12 @@ export interface CommitRequest {
   message: string
   push?: boolean
 }
+
+/** `POST /api/dsh-git-flow/discard`: throw the selected paths back to HEAD. */
+export interface DiscardRequest {
+  sessionId: string
+  files: string[]
+}
 export interface GenerateMessageRequest {
   sessionId: string
   files: string[]
