@@ -66,6 +66,12 @@ export interface GitPushView {
     /** git's own summary, trimmed to its last lines. */
     pushNote: string;
 }
+/** `POST /api/dsh-git-flow/pull`. */
+export interface GitPullView {
+    pulled: boolean;
+    /** git's own summary, trimmed to its last lines. */
+    pullNote: string;
+}
 /** `POST /api/dsh-git-flow/generate-message`. */
 export interface GitMessageView {
     message: string;

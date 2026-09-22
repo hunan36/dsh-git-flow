@@ -3,7 +3,7 @@
  * session; the host resolves the repository.
  */
 import type { TranslateNS } from '@deepseek-ai/dsh-client-ui-slots';
-import type { CheckoutRequest, DiscardRequest, CreateBranchRequest, CommitRequest, GenerateMessageRequest, GitBranchesView, GitCommitView, GitErrorCode, GitMessageView, GitPushView, GitStatusView } from '../contract.ts';
+import type { CheckoutRequest, DiscardRequest, CreateBranchRequest, CommitRequest, GenerateMessageRequest, GitBranchesView, GitCommitView, GitErrorCode, GitMessageView, GitPullView, GitPushView, GitStatusView } from '../contract.ts';
 /** A git operation refused by the host, carrying its structured code. */
 export declare class GitApiError extends Error {
     readonly code: GitErrorCode;
@@ -26,5 +26,8 @@ export declare const gitApi: {
     push: (body: {
         sessionId: string;
     }) => Promise<GitPushView>;
+    pull: (body: {
+        sessionId: string;
+    }) => Promise<GitPullView>;
     generateMessage: (body: GenerateMessageRequest) => Promise<GitMessageView>;
 };

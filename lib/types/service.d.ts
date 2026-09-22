@@ -36,8 +36,8 @@ export declare class GitFlow extends Service {
     static Config: z<GitFlowConfig>;
     private readonly config;
     private readonly git;
-    /** Push timeouts outlive the default runner deadline, so the runner is per-call-site. */
-    private readonly pushGit;
+    /** Remote-waiting calls (push, pull) outlive the default runner deadline, so the runner is per-call-site. */
+    private readonly remoteGit;
     constructor(ctx: Context, config?: GitFlowConfig);
     /**
      * @param sessionId - session whose workspace backs the repository.
@@ -87,6 +87,15 @@ export declare class GitFlow extends Service {
      * @returns git's push summary.
      */
     push(sessionId: string): Promise<string>;
+    /**
+     * Pull the current branch's upstream with `--ff-only`: a fast-forward is the
+     * only allowed outcome, so a diverged branch fails instead of producing a
+     * merge commit or rewriting local commits. This is the plugin's one
+     * user-initiated network call outside push; nothing fetches in the background.
+     * @param sessionId - session whose workspace backs the repository.
+     * @returns git's pull summary.
+     */
+    pull(sessionId: string): Promise<string>;
     /**
      * Ask the session's own model route for a commit message over the selected diff.
      * @param sessionId - session whose workspace and route back the call.

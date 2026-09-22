@@ -98,6 +98,20 @@ export function GitFlowChip({ sessionId, t }: GitFlowChipProps) {
     }
   }
 
+  /** Pull the current branch's unmerged commits, straight from the menu. */
+  const pullRemote = async () => {
+    setBusy(true)
+    try {
+      await gitApi.pull({ sessionId })
+      notify(t('pull.done', { branch: status?.head ?? '' }))
+      refresh()
+    } catch (error) {
+      notify(errorText(t, error), true)
+    } finally {
+      setBusy(false)
+    }
+  }
+
   const checkout = async (name: string) => {
     if (name === status?.head) return
     setBusy(true)
@@ -135,6 +149,7 @@ export function GitFlowChip({ sessionId, t }: GitFlowChipProps) {
           setDialog({ kind: 'commit' })
         }}
         onPush={() => { void pushCommits() }}
+        onPull={() => { void pullRemote() }}
         onRefresh={() => {
           setBranches(undefined)
           refresh()

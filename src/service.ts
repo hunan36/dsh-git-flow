@@ -57,8 +57,8 @@ export class GitFlow extends Service {
 
   private readonly config: Required<Pick<GitFlowConfig, 'timeoutMs' | 'pushTimeoutMs' | 'messageMaxDiffBytes' | 'messageLanguage'>>
   private readonly git: GitRunner
-  /** Push timeouts outlive the default runner deadline, so the runner is per-call-site. */
-  private readonly pushGit: GitRunner
+  /** Remote-waiting calls (push, pull) outlive the default runner deadline, so the runner is per-call-site. */
+  private readonly remoteGit: GitRunner
 
   constructor(ctx: Context, config: GitFlowConfig = {}) {
     super(ctx, 'gitFlow')
@@ -69,7 +69,7 @@ export class GitFlow extends Service {
       messageLanguage: config.messageLanguage ?? 'en',
     }
     this.git = new GitRunner(ctx.subprocess, this.config.timeoutMs)
-    this.pushGit = new GitRunner(ctx.subprocess, this.config.pushTimeoutMs)
+    this.remoteGit = new GitRunner(ctx.subprocess, this.config.pushTimeoutMs)
 
     // Only the web profile has a server to talk to; a headless profile never
     // mounts the routes and the browser half never exists there.
@@ -253,11 +253,27 @@ export class GitFlow extends Service {
     const status = await this.status(sessionId)
     if (status.detached) throw new GitError('git/detached-head', 'there is no branch to push')
     if (status.upstream) {
-      const result = await this.pushGit.runOk(status.repo, ['push'])
+      const result = await this.remoteGit.runOk(status.repo, ['push'])
       return trimOutput(`${result.stdout}\n${result.stderr}`)
     }
     const remote = (await this.git.run(status.repo, ['config', '--get', `branch.${status.head}.remote`])).stdout.trim() || 'origin'
-    const result = await this.pushGit.runOk(status.repo, ['push', '--set-upstream', remote, `HEAD:refs/heads/${status.head}`])
+    const result = await this.remoteGit.runOk(status.repo, ['push', '--set-upstream', remote, `HEAD:refs/heads/${status.head}`])
+    return trimOutput(`${result.stdout}\n${result.stderr}`)
+  }
+
+  /**
+   * Pull the current branch's upstream with `--ff-only`: a fast-forward is the
+   * only allowed outcome, so a diverged branch fails instead of producing a
+   * merge commit or rewriting local commits. This is the plugin's one
+   * user-initiated network call outside push; nothing fetches in the background.
+   * @param sessionId - session whose workspace backs the repository.
+   * @returns git's pull summary.
+   */
+  async pull(sessionId: string): Promise<string> {
+    const status = await this.status(sessionId)
+    if (status.detached) throw new GitError('git/detached-head', 'there is no branch to pull')
+    if (!status.upstream) throw new GitError('git/invalid-input', 'this branch has no upstream to pull from')
+    const result = await this.remoteGit.runOk(status.repo, ['pull', '--ff-only'])
     return trimOutput(`${result.stdout}\n${result.stderr}`)
   }
 

@@ -15,6 +15,8 @@ export interface BranchMenuProps {
     onCommit: () => void;
     /** Push what is already committed, without opening the commit panel. */
     onPush: () => void;
+    /** Pull the current branch's upstream (`--ff-only`). */
+    onPull: () => void;
     onRefresh: () => void;
 }
 /** Pill plus anchored branch picker: pinned search, scrolling rows, pinned actions. */

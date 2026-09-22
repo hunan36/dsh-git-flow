@@ -6,7 +6,7 @@
 import type { Context } from '@deepseek-ai/cordis'
 import type { IncomingMessage, ServerResponse } from 'node:http'
 import type {} from '@deepseek-ai/dsh-host-webserver'
-import type { GitErrorCode, GitPushView, GitResponse } from './contract.ts'
+import type { GitErrorCode, GitPullView, GitPushView, GitResponse } from './contract.ts'
 import { GitError } from './git.ts'
 import type { GitFlow } from './service.ts'
 
@@ -58,6 +58,13 @@ export function registerGitFlowRoutes(ctx: Context, service: GitFlow): () => voi
       const { sessionId } = readBody(body)
       const pushNote = await service.push(sessionId)
       const view: GitPushView = { pushed: true, pushNote }
+      return view
+    }) }),
+    ctx.webServer.register({ kind: 'exact', path: `${BASE}/pull`, handler: (req, res) => handle(req, res, async (body) => {
+      requireMethod(req, 'POST')
+      const { sessionId } = readBody(body)
+      const pullNote = await service.pull(sessionId)
+      const view: GitPullView = { pulled: true, pullNote }
       return view
     }) }),
     ctx.webServer.register({ kind: 'exact', path: `${BASE}/generate-message`, handler: (req, res) => handle(req, res, async (body) => {

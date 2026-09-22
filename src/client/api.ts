@@ -13,6 +13,7 @@ import type {
   GitCommitView,
   GitErrorCode,
   GitMessageView,
+  GitPullView,
   GitPushView,
   GitResponse,
   GitStatusView,
@@ -109,5 +110,6 @@ export const gitApi = {
   commit: (body: CommitRequest) => post<GitCommitView>('/commit', body),
   discard: (body: DiscardRequest) => post<GitStatusView>('/discard', body),
   push: (body: { sessionId: string }) => post<GitPushView>('/push', body),
+  pull: (body: { sessionId: string }) => post<GitPullView>('/pull', body),
   generateMessage: (body: GenerateMessageRequest) => post<GitMessageView>('/generate-message', body),
 }

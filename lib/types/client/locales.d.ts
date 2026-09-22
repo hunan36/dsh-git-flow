@@ -22,6 +22,7 @@ declare const zh: {
     readonly 'menu.newBranch': "新建分支…";
     readonly 'menu.commit': "提交…";
     readonly 'menu.push': "推送提交";
+    readonly 'menu.pull': "拉取远程代码";
     readonly 'menu.refresh': "刷新状态";
     readonly 'checkout.done': "已切换到 {branch}";
     readonly 'checkout.dirtyTitle': "工作区有未提交改动";
@@ -64,6 +65,7 @@ declare const zh: {
     readonly 'commit.pushDone': "已提交并推送 {hash}";
     readonly 'commit.pushFail': "已提交 {hash}，但推送失败";
     readonly 'push.done': "已推送 {branch}";
+    readonly 'pull.done': "已拉取 {branch}";
     readonly 'status.clean': "工作区干净";
     readonly 'status.conflict': "有冲突文件";
     readonly 'error.notRepository': "当前工作区不是 git 仓库";
@@ -90,6 +92,7 @@ export declare const gitFlowLocale: {
         readonly 'menu.newBranch': "新建分支…";
         readonly 'menu.commit': "提交…";
         readonly 'menu.push': "推送提交";
+        readonly 'menu.pull': "拉取远程代码";
         readonly 'menu.refresh': "刷新状态";
         readonly 'checkout.done': "已切换到 {branch}";
         readonly 'checkout.dirtyTitle': "工作区有未提交改动";
@@ -132,6 +135,7 @@ export declare const gitFlowLocale: {
         readonly 'commit.pushDone': "已提交并推送 {hash}";
         readonly 'commit.pushFail': "已提交 {hash}，但推送失败";
         readonly 'push.done': "已推送 {branch}";
+        readonly 'pull.done': "已拉取 {branch}";
         readonly 'status.clean': "工作区干净";
         readonly 'status.conflict': "有冲突文件";
         readonly 'error.notRepository': "当前工作区不是 git 仓库";
@@ -143,7 +147,7 @@ export declare const gitFlowLocale: {
         readonly 'error.invalid': "输入不合法：{detail}";
         readonly 'error.failed': "操作失败：{detail}";
     };
-    en: Record<"chip.tooltip" | "chip.tooltip.clean" | "chip.aheadBehind" | "chip.unpushed" | "menu.search" | "menu.local" | "menu.remote" | "menu.empty" | "menu.loading" | "menu.newBranch" | "menu.commit" | "menu.push" | "menu.refresh" | "checkout.done" | "checkout.dirtyTitle" | "checkout.dirtyBody" | "checkout.force" | "create.title" | "create.description" | "create.name" | "create.placeholder" | "create.submit" | "create.done" | "commit.title" | "commit.description" | "commit.files" | "commit.selectAll" | "commit.message" | "commit.messageLanguage" | "commit.messagePlaceholder" | "commit.generate" | "commit.regenerate" | "commit.generating" | "commit.push" | "commit.commit" | "commit.commitPush" | "commit.cancel" | "commit.discard" | "commit.discardTitle" | "commit.discardBody" | "commit.discardDone" | "commit.discardOne" | "commit.resize" | "commit.none" | "commit.needMessage" | "commit.selected" | "commit.noUpstream" | "commit.fallback" | "commit.staleHost" | "commit.fallbackReason" | "commit.done" | "commit.pushDone" | "commit.pushFail" | "push.done" | "status.clean" | "status.conflict" | "error.notRepository" | "error.notInstalled" | "error.timeout" | "error.noRoute" | "error.detached" | "error.noFiles" | "error.invalid" | "error.failed", string>;
+    en: Record<"chip.tooltip" | "chip.tooltip.clean" | "chip.aheadBehind" | "chip.unpushed" | "menu.search" | "menu.local" | "menu.remote" | "menu.empty" | "menu.loading" | "menu.newBranch" | "menu.commit" | "menu.push" | "menu.pull" | "menu.refresh" | "checkout.done" | "checkout.dirtyTitle" | "checkout.dirtyBody" | "checkout.force" | "create.title" | "create.description" | "create.name" | "create.placeholder" | "create.submit" | "create.done" | "commit.title" | "commit.description" | "commit.files" | "commit.selectAll" | "commit.message" | "commit.messageLanguage" | "commit.messagePlaceholder" | "commit.generate" | "commit.regenerate" | "commit.generating" | "commit.push" | "commit.commit" | "commit.commitPush" | "commit.cancel" | "commit.discard" | "commit.discardTitle" | "commit.discardBody" | "commit.discardDone" | "commit.discardOne" | "commit.resize" | "commit.none" | "commit.needMessage" | "commit.selected" | "commit.noUpstream" | "commit.fallback" | "commit.staleHost" | "commit.fallbackReason" | "commit.done" | "commit.pushDone" | "commit.pushFail" | "push.done" | "pull.done" | "status.clean" | "status.conflict" | "error.notRepository" | "error.notInstalled" | "error.timeout" | "error.noRoute" | "error.detached" | "error.noFiles" | "error.invalid" | "error.failed", string>;
 };
 /** Every copy key of the `gitFlow` namespace. */
 export type GitFlowKey = keyof typeof zh;

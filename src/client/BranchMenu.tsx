@@ -13,6 +13,8 @@ import type { CSSProperties, ReactNode } from 'react'
 import {
   IconBranchOutline16,
   IconCheckOutline16,
+  IconDownloadOutline16,
+  IconEditOutline16,
   IconPlusOutline16,
   IconRefreshOutline14,
   IconRightUpOutline16,
@@ -50,6 +52,8 @@ export interface BranchMenuProps {
   onCommit: () => void
   /** Push what is already committed, without opening the commit panel. */
   onPush: () => void
+  /** Pull the current branch's upstream (`--ff-only`). */
+  onPull: () => void
   onRefresh: () => void
 }
 
@@ -131,14 +135,25 @@ export function BranchMenu(props: BranchMenuProps) {
           >
             <IconBranchOutline16 size={14} />
             <span style={nameStyle}>{status.head}</span>
+            {status.behind > 0 && (
+              <span style={{ ...badgeBase, background: 'var(--dsw-alias-state-business-primary, #4176e6)' }}>
+                <IconDownloadOutline16 size={10} />
+                {status.behind}
+              </span>
+            )}
             {status.ahead > 0 && (
-              <span style={aheadStyle}>
-                <IconRightUpOutline16 size={11} />
+              <span style={{ ...badgeBase, background: 'var(--dsw-alias-state-success-primary, #22c55e)' }}>
+                <IconRightUpOutline16 size={10} />
                 {status.ahead}
               </span>
             )}
             {status.upstream === undefined && <span style={aheadStyle}><IconRightUpOutline16 size={11} /></span>}
-            {status.files.length > 0 && <span style={countStyle}>{status.files.length}</span>}
+            {status.files.length > 0 && (
+              <span style={{ ...badgeBase, background: 'var(--dsw-alias-state-warn-primary, #f59e0b)' }}>
+                <IconEditOutline16 size={10} />
+                {status.files.length}
+              </span>
+            )}
           </Pill>
         </Tooltip>
       </span>
@@ -210,6 +225,15 @@ export function BranchMenu(props: BranchMenuProps) {
               onClick={() => {
                 props.onOpenChange(false)
                 props.onPush()
+              }}
+            />
+            <ActionRow
+              icon={<IconDownloadOutline16 size={14} />}
+              label={t('menu.pull')}
+              disabled={status.upstream === undefined}
+              onClick={() => {
+                props.onOpenChange(false)
+                props.onPull()
               }}
             />
             <ActionRow icon={<IconRefreshOutline14 size={14} />} label={t('menu.refresh')} onClick={() => {
@@ -389,13 +413,15 @@ const aheadStyle: CSSProperties = {
   fontSize: 11,
   color: 'var(--dsw-alias-label-secondary, currentColor)',
 }
-const countStyle: CSSProperties = {
+/** Chip count pill: white glyphs on a state color; the color names the fact. */
+const badgeBase: CSSProperties = {
+  display: 'inline-flex',
+  alignItems: 'center',
+  gap: 2,
   minWidth: 16,
-  padding: '0 4px',
+  padding: '0 5px',
   borderRadius: 8,
-  textAlign: 'center',
   fontSize: 11,
   lineHeight: '16px',
-  background: 'var(--dsw-alias-state-warn-primary, currentColor)',
   color: 'var(--dsw-alias-label-primary-inverted, #ffffff)',
 }
