@@ -1,7 +1,0 @@
-- insert:
-    - id: git-flow
-      name: 'dsh-git-flow'
-      config:
-        timeoutMs: 15000
-        messageMaxDiffBytes: 65536
-        messageLanguage: en
