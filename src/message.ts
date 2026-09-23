@@ -6,7 +6,7 @@
 import type { Context } from '@deepseek-ai/cordis'
 import type { GitFileView, GitMessageView } from './contract.ts'
 import { GitError } from './git.ts'
-import type { FinishReason, StreamChunk } from '@deepseek-ai/dsh-llm'
+import type { FinishReason, MessageId, StreamChunk } from '@deepseek-ai/dsh-llm'
 import type { Session } from '@deepseek-ai/dsh-session'
 
 /** Everything the prompt needs, already gathered by the service. */
@@ -105,11 +105,11 @@ async function streamMessage(input: CommitMessageInput, provider: string, model:
     provider,
     model,
     system: SYSTEM[input.language],
-    // A one-shot request input: 0.1.7's `RequestUserInput` gives it no durable
-    // session identity and no `source` (see dsh-llm types.d.ts).
     messages: [{
+      id: `dsh-git-flow:commit-message` as unknown as MessageId,
       role: 'user',
       content: [{ type: 'text', text: buildUserPrompt(input) }],
+      source: { kind: 'plugin', plugin: 'dsh-git-flow' },
     }],
     maxTokens: MESSAGE_MAX_TOKENS,
     temperature: 0.2,

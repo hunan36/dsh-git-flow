@@ -5,7 +5,7 @@
  */
 import { useEffect, useState } from 'react'
 import type { CSSProperties, PointerEvent as ReactPointerEvent } from 'react'
-import { Button, Checkbox, IconRefreshOutlineRegular, IconSparkleRegular, IconTrashOutlineRegular, IconWarningOutlineRegular, Input, Modal, Pill, Tooltip } from '@deepseek-ai/dsh-client-ui-primitives'
+import { Button, Checkbox, IconRefreshOutline14, IconSparkle16, IconTrashOutline16, IconWarningOutline16, Input, Modal, Pill, Tooltip } from '@deepseek-ai/dsh-client-ui-primitives'
 import type { TranslateNS } from '@deepseek-ai/dsh-client-ui-slots'
 import type { GitFileView, GitStatusView, MessageLanguage } from '../contract.ts'
 import { errorText, gitApi, isStaleSelection } from './api.ts'
@@ -214,7 +214,7 @@ export function CommitDialog(props: CommitDialogProps) {
           <Button
             size="sm"
             variant="ghost"
-            icon={message.length === 0 ? <IconSparkleRegular size={14} /> : <IconRefreshOutlineRegular size={14} />}
+            icon={message.length === 0 ? <IconSparkle16 size={14} /> : <IconRefreshOutline14 size={14} />}
             onClick={() => { void generate() }}
             disabled={generating || busy}
           >
@@ -314,7 +314,7 @@ function FileRow(props: {
             aria-label={props.discardLabel}
             onClick={props.onDiscard}
           >
-            <IconTrashOutlineRegular size={14} />
+            <IconTrashOutline16 size={14} />
           </button>
         </Tooltip>
       )}
@@ -414,7 +414,7 @@ export function DiscardDialog(props: DiscardDialogProps) {
       footer={(
         <div style={actionsStyle}>
           <Button size="sm" onClick={onClose} disabled={busy}>{t('commit.cancel')}</Button>
-          <Button size="sm" variant="primary" icon={<IconWarningOutlineRegular size={14} />} onClick={() => { void discard() }} disabled={busy}>
+          <Button size="sm" variant="primary" icon={<IconWarningOutline16 size={14} />} onClick={() => { void discard() }} disabled={busy}>
             {t('commit.discard')}
           </Button>
         </div>
@@ -521,7 +521,7 @@ export function ForceCheckoutDialog(props: ForceCheckoutDialogProps) {
       footer={(
         <div style={actionsStyle}>
           <Button size="sm" onClick={onClose} disabled={busy}>{t('commit.cancel')}</Button>
-          <Button size="sm" variant="primary" icon={<IconWarningOutlineRegular size={14} />} onClick={() => { void force() }} disabled={busy}>
+          <Button size="sm" variant="primary" icon={<IconWarningOutline16 size={14} />} onClick={() => { void force() }} disabled={busy}>
             {t('checkout.force')}
           </Button>
         </div>
@@ -577,7 +577,7 @@ const fileRowStyle: CSSProperties = {
   padding: '3px 6px',
   borderRadius: 6,
 }
-const rowHoverStyle: CSSProperties = { background: 'var(--dsw-alias-interactive-bg-hover, rgba(127,127,127,0.10))' }
+const rowHoverStyle: CSSProperties = { background: 'var(--dsw-alias-bg-layer-2, rgba(127,127,127,0.10))' }
 const iconButtonStyle: CSSProperties = {
   display: 'inline-flex',
   alignItems: 'center',

@@ -11,15 +11,15 @@ import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 import type { CSSProperties, ReactNode } from 'react'
 import {
-  IconBranchOutlineRegular,
-  IconCheckOutlineRegular,
-  IconDownloadOutlineRegular,
-  IconEditOutlineRegular,
-  IconPlusOutlineRegular,
-  IconRefreshOutlineRegular,
-  IconRightUpOutlineRegular,
-  IconSearchOutlineRegular,
-  IconSparkleRegular,
+  IconBranchOutline16,
+  IconCheckOutline16,
+  IconDownloadOutline16,
+  IconEditOutline16,
+  IconPlusOutline16,
+  IconRefreshOutline14,
+  IconRightUpOutline16,
+  IconSearchOutline16,
+  IconSparkle16,
   Input,
   Pill,
   Tooltip,
@@ -133,24 +133,24 @@ export function BranchMenu(props: BranchMenuProps) {
             aria-expanded={open}
             style={pillStyle}
           >
-            <IconBranchOutlineRegular size={14} />
+            <IconBranchOutline16 size={14} />
             <span style={nameStyle}>{status.head}</span>
             {status.behind > 0 && (
               <span style={{ ...badgeBase, background: 'var(--dsw-alias-state-business-primary, #4176e6)' }}>
-                <IconDownloadOutlineRegular size={10} />
+                <IconDownloadOutline16 size={10} />
                 {status.behind}
               </span>
             )}
             {status.ahead > 0 && (
               <span style={{ ...badgeBase, background: 'var(--dsw-alias-state-success-primary, #22c55e)' }}>
-                <IconRightUpOutlineRegular size={10} />
+                <IconRightUpOutline16 size={10} />
                 {status.ahead}
               </span>
             )}
-            {status.upstream === undefined && <span style={aheadStyle}><IconRightUpOutlineRegular size={11} /></span>}
+            {status.upstream === undefined && <span style={aheadStyle}><IconRightUpOutline16 size={11} /></span>}
             {status.files.length > 0 && (
               <span style={{ ...badgeBase, background: 'var(--dsw-alias-state-warn-primary, #f59e0b)' }}>
-                <IconEditOutlineRegular size={10} />
+                <IconEditOutline16 size={10} />
                 {status.files.length}
               </span>
             )}
@@ -171,7 +171,7 @@ export function BranchMenu(props: BranchMenuProps) {
         >
           <div style={searchRowStyle}>
             <Input
-              icon={<IconSearchOutlineRegular size={14} />}
+              icon={<IconSearchOutline16 size={14} />}
               value={filter}
               placeholder={t('menu.search')}
               autoFocus
@@ -205,12 +205,12 @@ export function BranchMenu(props: BranchMenuProps) {
               )))}
           </div>
           <div style={actionsStyle}>
-            <ActionRow icon={<IconPlusOutlineRegular size={14} />} label={t('menu.newBranch')} onClick={() => {
+            <ActionRow icon={<IconPlusOutline16 size={14} />} label={t('menu.newBranch')} onClick={() => {
               props.onOpenChange(false)
               props.onNewBranch()
             }} />
             <ActionRow
-              icon={<IconSparkleRegular size={14} />}
+              icon={<IconSparkle16 size={14} />}
               label={t('menu.commit')}
               disabled={status.files.length === 0}
               onClick={() => {
@@ -219,7 +219,7 @@ export function BranchMenu(props: BranchMenuProps) {
               }}
             />
             <ActionRow
-              icon={<IconRightUpOutlineRegular size={14} />}
+              icon={<IconRightUpOutline16 size={14} />}
               label={t('menu.push')}
               disabled={status.ahead === 0 && status.upstream !== undefined}
               onClick={() => {
@@ -228,7 +228,7 @@ export function BranchMenu(props: BranchMenuProps) {
               }}
             />
             <ActionRow
-              icon={<IconDownloadOutlineRegular size={14} />}
+              icon={<IconDownloadOutline16 size={14} />}
               label={t('menu.pull')}
               disabled={status.upstream === undefined}
               onClick={() => {
@@ -236,7 +236,7 @@ export function BranchMenu(props: BranchMenuProps) {
                 props.onPull()
               }}
             />
-            <ActionRow icon={<IconRefreshOutlineRegular size={14} />} label={t('menu.refresh')} onClick={() => {
+            <ActionRow icon={<IconRefreshOutline14 size={14} />} label={t('menu.refresh')} onClick={() => {
               props.onOpenChange(false)
               props.onRefresh()
             }} />
@@ -269,7 +269,7 @@ function BranchRow(props: {
       style={{ ...rowStyle, ...(hover && !props.disabled ? rowHoverStyle : null) }}
     >
       <span style={rowNameStyle}>{props.label}</span>
-      {props.current && <IconCheckOutlineRegular size={14} />}
+      {props.current && <IconCheckOutline16 size={14} />}
     </button>
   )
 }
@@ -343,11 +343,6 @@ const panelStyle: CSSProperties = {
   flexDirection: 'column',
   width: PANEL_WIDTH,
   background: 'var(--dsw-specific-menu, var(--dsw-alias-bg-layer-1, #ffffff))',
-  // The menu surface token is intentionally translucent (#f8f9fa94 in 0.1.7), and
-  // the design pairs it with the shell's frosted blur — the same recipe as the
-  // primitives Menu card. Without it the page shows straight through the popover.
-  backdropFilter: 'var(--dsw-menu-backdrop-filter, blur(40px) saturate(150%))',
-  WebkitBackdropFilter: 'var(--dsw-menu-backdrop-filter, blur(40px) saturate(150%))',
   border: '1px solid var(--dsw-alias-border-l1, rgba(127,127,127,0.25))',
   borderRadius: 16,
   boxShadow: 'var(--dsw-elevation-prominent, 0 12px 32px rgba(0,0,0,0.16))',
@@ -381,7 +376,7 @@ const rowStyle: CSSProperties = {
   textAlign: 'left',
   cursor: 'pointer',
 }
-const rowHoverStyle: CSSProperties = { background: 'var(--dsw-alias-interactive-bg-hover, rgba(127,127,127,0.10))' }
+const rowHoverStyle: CSSProperties = { background: 'var(--dsw-alias-bg-layer-2, rgba(127,127,127,0.10))' }
 const rowNameStyle: CSSProperties = { overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }
 const groupStyle: CSSProperties = {
   padding: '6px 8px 2px',
