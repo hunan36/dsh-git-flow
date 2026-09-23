@@ -3,7 +3,7 @@
  * the three dialog surfaces, and the toast. Everything below it is presentational.
  */
 import { useCallback, useEffect, useState } from 'react'
-import { IconWarningOutline16, Toast } from '@deepseek-ai/dsh-client-ui-primitives'
+import { IconWarningOutlineRegular, Toast } from '@deepseek-ai/dsh-client-ui-primitives'
 import type { TranslateNS } from '@deepseek-ai/dsh-client-ui-slots'
 import type { GitBranchesView, GitStatusView } from '../contract.ts'
 import { BranchMenu } from './BranchMenu.tsx'
@@ -189,7 +189,7 @@ export function GitFlowChip({ sessionId, t }: GitFlowChipProps) {
         <Toast
           key={banner.seq}
           text={banner.text}
-          icon={banner.failed ? <IconWarningOutline16 size={14} /> : undefined}
+          icon={banner.failed ? <IconWarningOutlineRegular size={14} /> : undefined}
           onDone={() => { setBanner(undefined) }}
         />
       )}
