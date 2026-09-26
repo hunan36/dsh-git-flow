@@ -18,7 +18,7 @@ export interface GitResult {
     stdout: string;
     stderr: string;
 }
-/** Turn `git status --porcelain=v2 --branch` into the facts the UI renders. */
+/** Turn `git status --porcelain=v2 --branch -z` into the facts the UI renders. */
 export interface GitStatus {
     /** Branch name, `'(detached)'` when detached, `'(unknown)'` in an empty repo. */
     head: string;
@@ -71,7 +71,15 @@ export declare class GitRunner {
 /** Trim git's stderr into one line suitable for a UI detail message. */
 export declare function describeFailure(args: readonly string[], result: GitResult): string;
 /**
- * Parse `git status --porcelain=v2 --branch`.
+ * Parse `git status --porcelain=v2 --branch -z`.
+ *
+ * The `-z` form is the only one whose paths can be trusted: in the line-based
+ * form git C-quotes any path holding a non-ASCII byte, a double quote, or a
+ * backslash, so a Chinese file name arrives as `"docs/00-\350\265\204..."`
+ * with the quotes and escapes intact. Handing that text back to git as a
+ * pathspec fails with `pathspec ... did not match any files`, which is why
+ * committing a Chinese-named file used to break. `-z` terminates every record
+ * (headers included) with NUL and never quotes a path.
  * @param stdout - raw porcelain output.
  * @returns branch facts and one entry per changed path.
  */

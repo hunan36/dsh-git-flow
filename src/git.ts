@@ -38,7 +38,7 @@ export interface GitResult {
   stderr: string
 }
 
-/** Turn `git status --porcelain=v2 --branch` into the facts the UI renders. */
+/** Turn `git status --porcelain=v2 --branch -z` into the facts the UI renders. */
 export interface GitStatus {
   /** Branch name, `'(detached)'` when detached, `'(unknown)'` in an empty repo. */
   head: string
@@ -152,13 +152,23 @@ export function describeFailure(args: readonly string[], result: GitResult): str
 }
 
 /**
- * Parse `git status --porcelain=v2 --branch`.
+ * Parse `git status --porcelain=v2 --branch -z`.
+ *
+ * The `-z` form is the only one whose paths can be trusted: in the line-based
+ * form git C-quotes any path holding a non-ASCII byte, a double quote, or a
+ * backslash, so a Chinese file name arrives as `"docs/00-\350\265\204..."`
+ * with the quotes and escapes intact. Handing that text back to git as a
+ * pathspec fails with `pathspec ... did not match any files`, which is why
+ * committing a Chinese-named file used to break. `-z` terminates every record
+ * (headers included) with NUL and never quotes a path.
  * @param stdout - raw porcelain output.
  * @returns branch facts and one entry per changed path.
  */
 export function parseStatus(stdout: string): GitStatus {
   const status: GitStatus = { head: '(unknown)', oid: '', ahead: 0, behind: 0, files: [] }
-  for (const line of stdout.split('\n')) {
+  const records = stdout.split('\0')
+  for (let i = 0; i < records.length; i++) {
+    const line = records[i]
     if (!line) continue
     if (line.startsWith('# branch.oid ')) status.oid = line.slice(13).trim()
     else if (line.startsWith('# branch.head ')) status.head = line.slice(14).trim()
@@ -171,16 +181,17 @@ export function parseStatus(stdout: string): GitStatus {
     } else if (line.startsWith('? ')) {
       status.files.push({ path: line.slice(2), indexStatus: '?', worktreeStatus: '?', staged: false, untracked: true, conflicted: false })
     } else if (line.startsWith('u ')) {
-      // u <XY> <sub> <m1> <m2> <m3> <mW> <h1> <h2> <h3> <score> <path>
+      // u <XY> <sub> <m1> <m2> <m3> <mW> <h1> <h2> <h3> <path>
       const fields = line.split(' ')
-      const path = (fields.slice(11).join(' ') || line).split('\t')[0]
+      const path = fields.slice(10).join(' ')
       status.files.push({ path, indexStatus: fields[1][0], worktreeStatus: fields[1][1], staged: false, untracked: false, conflicted: true })
     } else if (line.startsWith('1 ') || line.startsWith('2 ')) {
       const fields = line.split(' ')
       const xy = fields[1] ?? '..'
-      // Renames carry a score field and `<newPath>\t<oldPath>`; plain records end at the path.
-      const tail = fields.slice(line[0] === '2' ? 9 : 8).join(' ')
-      const [path, oldPath] = line[0] === '2' ? tail.split('\t') : [tail, undefined]
+      // A rename record ends at its new path; the renamed-from path is the next
+      // NUL-terminated record instead of a tab-separated tail.
+      const path = fields.slice(line[0] === '2' ? 9 : 8).join(' ')
+      const oldPath = line[0] === '2' ? records[++i] : undefined
       status.files.push({
         path,
         oldPath,

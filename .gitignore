@@ -1,4 +1,5 @@
 node_modules/
 .scratch/
+.pnpm-store/
 *.tsbuildinfo
 .DS_Store

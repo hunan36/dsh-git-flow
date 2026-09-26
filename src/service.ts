@@ -84,7 +84,10 @@ export class GitFlow extends Service {
    */
   async status(sessionId: string): Promise<GitStatusView> {
     const repo = await this.resolveRepo(sessionId)
-    const result = await this.git.runOk(repo, ['status', '--porcelain=v2', '--branch'])
+    // `-z` is load-bearing: without it git C-quotes paths that hold non-ASCII
+    // bytes (a Chinese file name becomes `"docs/00-\350\265\204..."`), and that
+    // quoted text would be sent back as a literal pathspec on the next commit.
+    const result = await this.git.runOk(repo, ['status', '--porcelain=v2', '--branch', '-z'])
     const parsed = parseStatus(result.stdout)
     const files = dedupeFiles(parsed.files)
     return {
@@ -303,15 +306,19 @@ export class GitFlow extends Service {
   /** Collect the selected diff without staging anything. */
   private async collectDiff(repo: string, selected: readonly string[]): Promise<{ text: string; truncated: boolean }> {
     const parts: string[] = []
-    const numstat = await this.git.runOk(repo, ['diff', 'HEAD', '--numstat', '--', ...selected])
+    // `core.quotePath=false` is display-only: it keeps a Chinese path readable
+    // in the prompt instead of `"docs/\345\274\200..."`. The runner pins
+    // LC_ALL=C, where git would otherwise octal-escape every non-ASCII byte.
+    const display = ['-c', 'core.quotePath=false']
+    const numstat = await this.git.runOk(repo, [...display, 'diff', 'HEAD', '--numstat', '--', ...selected])
     if (numstat.stdout.trim()) parts.push(`# numstat\n${numstat.stdout.trim()}`)
-    const tracked = await this.git.runOk(repo, ['diff', 'HEAD', '--', ...selected])
+    const tracked = await this.git.runOk(repo, [...display, 'diff', 'HEAD', '--', ...selected])
     if (tracked.stdout.trim()) parts.push(tracked.stdout)
     // Untracked paths are invisible to `diff HEAD`; render them as pure additions.
     for (const path of selected) {
       const known = await this.git.run(repo, ['ls-files', '--error-unmatch', '--', path])
       if (known.exitCode === 0) continue
-      const added = await this.git.run(repo, ['diff', '--no-index', '--', '/dev/null', path])
+      const added = await this.git.run(repo, [...display, 'diff', '--no-index', '--', '/dev/null', path])
       if (added.stdout.trim()) parts.push(added.stdout)
     }
     const text = parts.join('\n')
