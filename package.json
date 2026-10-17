@@ -1,5 +1,5 @@
 {
-  "name": "dsh-git-flow",
+  "name": "@hunan36/dsh-git-flow",
   "version": "0.4.0",
   "description": "Workspace git branch switcher, commit composer with AI-written messages, and push for DeepSeek Harness",
   "keywords": [

@@ -25,7 +25,7 @@ DeepSeek Harness 工作区 Git 插件：在输入框工具行放一个分支胶�
 界面左侧「插件」→ 右上「添加插件」→ 「包名或地址」填：
 
 ```
-dsh-git-flow
+@hunan36/dsh-git-flow
 ```
 
 点「安装」，装好后在「已安装」里启用（立即启用）。插件页会在**它自己所在的 profile**（通常是 `web`）里执行 `pnpm add` 并把本包写进 `dsh.profile.bundles`，两条都不用你手动做。
@@ -40,13 +40,13 @@ dsh-git-flow
 # 1. 用一个独立 profile，别动现有 web profile
 dsh --profile gitflow-web --from-default-profile web
 
-# 2. 装本插件 —— 给 npm 包名，或给本地克隆目录的绝对路径
-dsh plugin --profile gitflow-web add dsh-git-flow
+# 2. 装本插件 —— 给 npm 包名，或给 GitHub 地址 / 本地克隆目录的绝对路径
+dsh plugin --profile gitflow-web add @hunan36/dsh-git-flow
 # dsh plugin --profile gitflow-web add https://github.com/hunan36/dsh-git-flow
 # dsh plugin --profile gitflow-web add "$PWD"
 
 # 3. 插件页「立即启用」，或直接在 profile 的 package.json 里加 bundle
-#    dsh.profile.bundles += "dsh-git-flow"
+#    dsh.profile.bundles += "@hunan36/dsh-git-flow"
 #    由于本包声明了 dsh.bundle.patch，启用后它的 cordis.patch.yml 会自动挂载 GitFlow 服务
 
 # 4. 起服务
@@ -60,7 +60,7 @@ headless profile 也能装，但没有 `webServer`，`/api/dsh-git-flow/*` 不�
 DSH 不为第三方插件提供自动更新，需要手动执行一次：
 
 ```bash
-pnpm --dir ~/.dsh/profiles/web add dsh-git-flow@latest
+pnpm --dir ~/.dsh/profiles/web add @hunan36/dsh-git-flow@latest
 ```
 
 然后**重启 `dsh web`**。宿主半（服务与 API 路由）的改动必须重启才生效；浏览器半在重启后会重新拉取。
@@ -68,7 +68,7 @@ pnpm --dir ~/.dsh/profiles/web add dsh-git-flow@latest
 查当前版本与最新版本：
 
 ```bash
-npm view dsh-git-flow version
+npm view @hunan36/dsh-git-flow version
 ```
 
 装 GitHub 地址的用户不会被自动追新（`pnpm` 已锁到具体 commit），更新时要显式重装：

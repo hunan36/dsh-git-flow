@@ -25,7 +25,7 @@ Two ways in; either one is enough.
 Sidebar → **Plugins** → **Add plugin**, then put this in "Package or address":
 
 ```
-dsh-git-flow
+@hunan36/dsh-git-flow
 ```
 
 Press Install and enable it afterwards ("Enable"). That path runs `pnpm add` in **the profile serving the page** (usually `web`) and writes this package into `dsh.profile.bundles` for you — you do neither by hand.
@@ -39,7 +39,7 @@ The GitHub address `https://github.com/hunan36/dsh-git-flow` also works, but `pn
 DSH does not auto-update third-party plugins; updating takes one command:
 
 ```bash
-pnpm --dir ~/.dsh/profiles/web add dsh-git-flow@latest
+pnpm --dir ~/.dsh/profiles/web add @hunan36/dsh-git-flow@latest
 ```
 
 Then **restart `dsh web`**. Host-half changes (services and API routes) only apply after a restart; the browser half refetches its bundle then.
@@ -47,7 +47,7 @@ Then **restart `dsh web`**. Host-half changes (services and API routes) only app
 Check the installed and latest versions:
 
 ```bash
-npm view dsh-git-flow version
+npm view @hunan36/dsh-git-flow version
 ```
 
 Installs by GitHub address are not followed automatically (`pnpm` pinned a commit), so reinstall explicitly to update:
@@ -62,12 +62,13 @@ pnpm --dir ~/.dsh/profiles/web add github:hunan36/dsh-git-flow#main
 # 1. Create a dedicated profile (leaves your existing web profile alone)
 dsh --profile gitflow-web --from-default-profile web
 
-# 2. Add the plugin — a git URL, or the absolute path of a local checkout
-dsh plugin --profile gitflow-web add https://github.com/hunan36/dsh-git-flow
+# 2. Add the plugin — the npm package, a git URL, or a local checkout path
+dsh plugin --profile gitflow-web add @hunan36/dsh-git-flow
+# dsh plugin --profile gitflow-web add https://github.com/hunan36/dsh-git-flow
 # dsh plugin --profile gitflow-web add "$PWD"
 
 # 3. Enable it on the plugin page ("Enable"), or edit the bundle list directly:
-#    dsh.profile.bundles += "dsh-git-flow"
+#    dsh.profile.bundles += "@hunan36/dsh-git-flow"
 #    The package declares dsh.bundle.patch, so enabling it mounts the GitFlow
 #    service from the bundle's own cordis.patch.yml.
 
