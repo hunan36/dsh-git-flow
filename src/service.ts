@@ -9,7 +9,9 @@ import type { Context } from '@deepseek-ai/cordis'
 import type { Session } from '@deepseek-ai/dsh-session'
 import type { Workspace } from '@deepseek-ai/dsh-workspace'
 import z from '@deepseek-ai/schemastery'
-import type { GitBranchesView, GitBranchView, GitCommitView, GitFileView, GitMessageView, GitStatusView, MessageLanguage } from './contract.ts'
+import { readFile, writeFile } from 'node:fs/promises'
+import * as nodePath from 'node:path'
+import type { GitBranchesView, GitBranchView, GitCommitView, GitFileView, GitFlowConfigView, GitFlowFinishView, GitFlowKind, GitFlowStateView, GitMessageView, GitStatusView, MessageLanguage } from './contract.ts'
 import { describeFailure, GitError, GitRunner, parseStatus } from './git.ts'
 import { generateCommitMessage } from './message.ts'
 import { registerGitFlowRoutes } from './routes.ts'
@@ -26,6 +28,25 @@ export interface GitFlowConfig {
   messageMaxDiffBytes?: number
   /** Default commit message language; the commit panel can override it per call. */
   messageLanguage?: MessageLanguage
+  /** Branch every release and hotfix is merged back into. */
+  productionBranch?: string
+  /** Integration branch features start from and merge back into. */
+  developBranch?: string
+  featurePrefix?: string
+  releasePrefix?: string
+  hotfixPrefix?: string
+  /** Prefix of the tag a finished release or hotfix creates. */
+  tagPrefix?: string
+}
+
+/** The branch layout a git-flow run works with, resolved from config. */
+interface FlowLayout {
+  production: string
+  develop: string
+  featurePrefix: string
+  releasePrefix: string
+  hotfixPrefix: string
+  tagPrefix: string
 }
 
 /** A branch ref row from `for-each-ref`. */
@@ -53,9 +74,15 @@ export class GitFlow extends Service {
     pushTimeoutMs: z.number().default(120000),
     messageMaxDiffBytes: z.number().default(65536),
     messageLanguage: z.union([z.const('zh'), z.const('en')]).default('en'),
+    productionBranch: z.string().default('main'),
+    developBranch: z.string().default('develop'),
+    featurePrefix: z.string().default('feature/'),
+    releasePrefix: z.string().default('release/'),
+    hotfixPrefix: z.string().default('hotfix/'),
+    tagPrefix: z.string().default('v'),
   })
 
-  private readonly config: Required<Pick<GitFlowConfig, 'timeoutMs' | 'pushTimeoutMs' | 'messageMaxDiffBytes' | 'messageLanguage'>>
+  private readonly config: Required<GitFlowConfig>
   private readonly git: GitRunner
   /** Remote-waiting calls (push, pull) outlive the default runner deadline, so the runner is per-call-site. */
   private readonly remoteGit: GitRunner
@@ -67,6 +94,12 @@ export class GitFlow extends Service {
       pushTimeoutMs: config.pushTimeoutMs ?? 120000,
       messageMaxDiffBytes: config.messageMaxDiffBytes ?? 65536,
       messageLanguage: config.messageLanguage ?? 'en',
+      productionBranch: config.productionBranch ?? 'main',
+      developBranch: config.developBranch ?? 'develop',
+      featurePrefix: config.featurePrefix ?? 'feature/',
+      releasePrefix: config.releasePrefix ?? 'release/',
+      hotfixPrefix: config.hotfixPrefix ?? 'hotfix/',
+      tagPrefix: config.tagPrefix ?? 'v',
     }
     this.git = new GitRunner(ctx.subprocess, this.config.timeoutMs)
     this.remoteGit = new GitRunner(ctx.subprocess, this.config.pushTimeoutMs)
@@ -288,6 +321,247 @@ export class GitFlow extends Service {
     return trimOutput(`${result.stdout}\n${result.stderr}`)
   }
 
+  /** The resolved branch layout, as the panel renders it. */
+  private layout(): FlowLayout {
+    return {
+      production: this.config.productionBranch,
+      develop: this.config.developBranch,
+      featurePrefix: this.config.featurePrefix,
+      releasePrefix: this.config.releasePrefix,
+      hotfixPrefix: this.config.hotfixPrefix,
+      tagPrefix: this.config.tagPrefix,
+    }
+  }
+
+  /**
+   * Describe the flow state of the current branch: which family it belongs to,
+   * the version its name carries, whether the branches a run needs exist, and
+   * whether the tag a finish would create is already taken.
+   * @param sessionId - session whose workspace backs the repository.
+   */
+  async gitflowState(sessionId: string): Promise<GitFlowStateView> {
+    const status = await this.status(sessionId)
+    const layout = this.layout()
+    const repo = status.repo
+    const parsed = splitFlowBranch(status.head, layout)
+    const hasDevelop = await this.hasLocalBranch(repo, layout.develop) || (await this.remoteBranches(repo, layout.develop)).length > 0
+    const hasProduction = await this.hasLocalBranch(repo, layout.production) || (await this.remoteBranches(repo, layout.production)).length > 0
+    const target = parsed?.kind === 'feature' ? layout.develop : layout.production
+    const ahead = parsed === undefined ? 0 : await this.countAhead(repo, status.head, target)
+    // Only release and hotfix carry a tag; a feature finishes with a merge alone.
+    const tagName = parsed?.version === undefined || parsed.kind === 'feature' ? undefined : `${layout.tagPrefix}${parsed.version}`
+    const tagExists = tagName !== undefined && (await this.tagExists(repo, tagName))
+    return {
+      head: status.head,
+      detached: status.detached,
+      kind: parsed?.kind,
+      slug: parsed?.slug,
+      version: parsed?.version,
+      hasDevelop,
+      hasProduction,
+      ahead,
+      tagName,
+      tagExists,
+      branches: layoutView(layout),
+    }
+  }
+
+  /**
+   * Create a flow branch from the branch its family starts at and switch to it.
+   * A missing develop is reported as `git/develop-missing` so the panel can
+   * offer to create it rather than dead-ending on a raw git failure.
+   * @param sessionId - session whose workspace backs the repository.
+   * @param kind - branch family to start.
+   * @param name - name inside the family, without the prefix.
+   */
+  async startFlow(sessionId: string, kind: GitFlowKind, name: string): Promise<GitStatusView> {
+    const status = await this.status(sessionId)
+    if (status.detached) throw new GitError('git/detached-head', 'start a flow branch from a real branch, not a detached HEAD')
+    const layout = this.layout()
+    const slug = name.trim()
+    assertFlowSlug(slug)
+    const branch = `${prefixOf(kind, layout)}${slug}`
+    if (await this.hasLocalBranch(status.repo, branch)) {
+      throw new GitError('git/invalid-input', `branch ${branch} already exists`)
+    }
+    // Features and releases are cut from develop; a hotfix is cut from production.
+    const base = kind === 'hotfix' ? layout.production : layout.develop
+    if (!(await this.hasLocalBranch(status.repo, base))) {
+      if (kind !== 'hotfix') {
+        throw new GitError('git/develop-missing', `branch ${base} does not exist yet; create it first`)
+      }
+      throw new GitError('git/invalid-input', `branch ${base} does not exist; a hotfix starts from it`)
+    }
+    await this.runSwitch(status.repo, ['switch', '-c', branch, base])
+    return this.status(sessionId)
+  }
+
+  /**
+   * Create the develop branch from the production branch and switch to it.
+   * Only offered when develop is missing; an existing one is left untouched.
+   * @param sessionId - session whose workspace backs the repository.
+   */
+  async initDevelop(sessionId: string): Promise<GitStatusView> {
+    const status = await this.status(sessionId)
+    const layout = this.layout()
+    if (await this.hasLocalBranch(status.repo, layout.develop)) return status
+    const from = (await this.hasLocalBranch(status.repo, layout.production)) ? layout.production : status.head
+    if (status.detached) throw new GitError('git/detached-head', 'cannot create a develop branch from a detached HEAD')
+    await this.runSwitch(status.repo, ['switch', '-c', layout.develop, from])
+    return this.status(sessionId)
+  }
+
+  /**
+   * Finish the current flow branch: merge it back (`--no-ff`), tag a release or
+   * hotfix, write its version, push, and delete the branch.
+   *
+   * Every check that can fail without side effects runs first: the worktree is
+   * clean, the merge would not conflict, and the tag is free. Past that point
+   * steps are not rolled back, because each one is a committed fact; a failure
+   * reports which step stopped the run and leaves the repository as it stands.
+   * @param sessionId - session whose workspace backs the repository.
+   * @param version - `package.json` version to write, release and hotfix only.
+   */
+  async finishFlow(sessionId: string, version?: string): Promise<GitFlowFinishView> {
+    const status = await this.status(sessionId)
+    if (status.detached) throw new GitError('git/detached-head', 'finish a flow branch, not a detached HEAD')
+    const layout = this.layout()
+    const parsed = splitFlowBranch(status.head, layout)
+    if (parsed === undefined) {
+      throw new GitError('git/gitflow-branch-required', `${status.head} is not a feature, release, or hotfix branch`)
+    }
+    const repo = status.repo
+    const branch = status.head
+    const { kind } = parsed
+    if (status.files.length > 0) {
+      throw new GitError('git/dirty-worktree', 'commit or discard the working tree changes before finishing')
+    }
+    // Release and hotfix land on production and develop; a feature lands on develop.
+    const targets = kind === 'feature' ? [layout.develop] : [layout.production, layout.develop]
+    for (const target of targets) {
+      if (!(await this.hasLocalBranch(repo, target))) {
+        throw new GitError('git/invalid-input', `branch ${target} does not exist, so ${branch} cannot be merged back into it`)
+      }
+    }
+    const tagName = kind === 'feature' ? undefined : `${layout.tagPrefix}${parsed.version ?? (await this.currentVersion(repo)) ?? ''}`
+    if (tagName === `${layout.tagPrefix}`) {
+      throw new GitError('git/invalid-input', 'a version is required to tag this branch')
+    }
+    // Preflight: a taken tag must stop the run before anything is merged.
+    if (tagName !== undefined && (await this.tagExists(repo, tagName))) {
+      throw new GitError('git/tag-exists', `tag ${tagName} already exists`)
+    }
+    const nextVersion = kind === 'feature' ? undefined : (version ?? parsed.version)
+    if (nextVersion !== undefined) assertVersion(nextVersion)
+
+    const mergedInto: string[] = []
+    for (const target of targets) {
+      await this.mergeInto(repo, target, branch)
+      mergedInto.push(target)
+    }
+    if (tagName !== undefined) {
+      await this.git.runOk(repo, ['tag', '-a', tagName, '-m', `${tagName}`])
+    }
+    let wroteVersion: string | undefined
+    if (nextVersion !== undefined) wroteVersion = await this.writeVersion(repo, nextVersion)
+
+    // Push is the one step that talks to the network; a failure here keeps every
+    // local fact the run already produced.
+    const pushed: string[] = []
+    const failure = await this.pushFinished(repo, targets, tagName, pushed)
+
+    // The branch is only deleted with `-d`, so an unmerged branch is refused by git.
+    let deleted = false
+    if (failure === undefined) {
+      const removed = await this.git.run(repo, ['branch', '-d', branch])
+      deleted = removed.exitCode === 0
+    }
+    return {
+      kind,
+      branch,
+      mergedInto,
+      tag: tagName,
+      version: wroteVersion,
+      pushed,
+      deleted,
+      failure,
+    }
+  }
+
+  /** Merge one branch into a target with a merge commit, refusing on conflict. */
+  private async mergeInto(repo: string, target: string, branch: string): Promise<void> {
+    await this.runSwitch(repo, ['switch', target])
+    const result = await this.git.run(repo, ['merge', '--no-ff', branch, '-m', `Merge branch '${branch}' into ${target}`])
+    if (result.exitCode === 0) return
+    // A conflict leaves markers in the worktree; report it as such and stop,
+    // rather than aborting a merge the user may want to resolve by hand.
+    const after = parseStatus((await this.git.runOk(repo, ['status', '--porcelain=v2', '--branch', '-z'])).stdout)
+    if (after.files.some((file) => file.conflicted)) {
+      throw new GitError('git/merge-conflict', `merging ${branch} into ${target} conflicted; resolve the conflicts, then finish again`)
+    }
+    throw new GitError('git/failed', describeFailure(['merge', '--no-ff', branch], result))
+  }
+
+  /** Push each merged target and the new tag; the first failure is reported, not thrown. */
+  private async pushFinished(repo: string, targets: readonly string[], tag: string | undefined, pushed: string[]): Promise<{ id: string; detail: string; ok: boolean } | undefined> {
+    for (const target of targets) {
+      const result = await this.remoteGit.run(repo, ['push', '-u', 'origin', target])
+      if (result.exitCode !== 0) return { id: 'push', detail: describeFailure(['push', '-u', 'origin', target], result), ok: false }
+      pushed.push(target)
+    }
+    if (tag !== undefined) {
+      const result = await this.remoteGit.run(repo, ['push', 'origin', tag])
+      if (result.exitCode !== 0) return { id: 'push', detail: describeFailure(['push', 'origin', tag], result), ok: false }
+      pushed.push(tag)
+    }
+    return undefined
+  }
+
+  /** Write `version` into the root `package.json`; a non-Node repo skips it. */
+  private async writeVersion(repo: string, version: string): Promise<string | undefined> {
+    const path = nodePath.join(repo, 'package.json')
+    let text: string
+    try {
+      text = await readFile(path, 'utf8')
+    } catch {
+      // No package.json at the root: nothing to version, and that is not an error.
+      return undefined
+    }
+    let manifest: Record<string, unknown>
+    try {
+      manifest = JSON.parse(text) as Record<string, unknown>
+    } catch {
+      throw new GitError('git/invalid-input', 'package.json is not valid JSON, so its version cannot be updated')
+    }
+    const previous = typeof manifest.version === 'string' ? manifest.version : undefined
+    if (previous === version) return version
+    manifest.version = version
+    await writeFile(path, `${JSON.stringify(manifest, undefined, 2)}\n`, 'utf8')
+    await this.git.runOk(repo, ['add', '--', 'package.json'])
+    await this.git.runOk(repo, ['commit', '-m', `chore(release): ${version}`, '--', 'package.json'])
+    return version
+  }
+
+  /** Version currently declared by the root package.json, when there is one. */
+  private async currentVersion(repo: string): Promise<string | undefined> {
+    try {
+      const manifest = JSON.parse(await readFile(nodePath.join(repo, 'package.json'), 'utf8')) as { version?: unknown }
+      return typeof manifest.version === 'string' ? manifest.version : undefined
+    } catch {
+      return undefined
+    }
+  }
+
+  private async countAhead(repo: string, branch: string, target: string): Promise<number> {
+    const result = await this.git.run(repo, ['rev-list', '--count', `${target}..${branch}`])
+    return result.exitCode === 0 ? Number(result.stdout.trim()) || 0 : 0
+  }
+
+  private async tagExists(repo: string, tag: string): Promise<boolean> {
+    const result = await this.git.run(repo, ['rev-parse', '--verify', '--quiet', `refs/tags/${tag}`])
+    return result.exitCode === 0
+  }
+
   /**
    * Ask the session's own model route for a commit message over the selected diff.
    * @param sessionId - session whose workspace and route back the call.
@@ -467,4 +741,68 @@ function liveSession(ctx: Context, sessionId: string): Session | undefined {
 function trimOutput(text: string): string {
   const lines = text.split('\n').map((line) => line.trim()).filter(Boolean)
   return lines.slice(-4).join('\n')
+}
+
+/** Publishable view of the branch layout. */
+function layoutView(layout: FlowLayout): GitFlowConfigView {
+  return {
+    production: layout.production,
+    develop: layout.develop,
+    featurePrefix: layout.featurePrefix,
+    releasePrefix: layout.releasePrefix,
+    hotfixPrefix: layout.hotfixPrefix,
+    tagPrefix: layout.tagPrefix,
+  }
+}
+
+function prefixOf(kind: GitFlowKind, layout: FlowLayout): string {
+  // Validated rather than defaulted: an unknown kind silently becoming a hotfix
+  // is a bug the caller would only notice after an odd branch name appeared.
+  if (kind === 'feature') return layout.featurePrefix
+  if (kind === 'release') return layout.releasePrefix
+  if (kind === 'hotfix') return layout.hotfixPrefix
+  throw new GitError('git/invalid-input', `unknown flow kind: ${String(kind)}`)
+}
+
+/**
+ * Read a branch name as a flow branch. A hotfix prefix is tested before the
+ * release one only because the two are distinct names, never nesting prefixes.
+ * @returns the family, the name inside it, and the version when it carries one.
+ */
+function splitFlowBranch(branch: string, layout: FlowLayout): { kind: GitFlowKind; slug: string; version?: string } | undefined {
+  const families: Array<[GitFlowKind, string]> = [
+    ['feature', layout.featurePrefix],
+    ['release', layout.releasePrefix],
+    ['hotfix', layout.hotfixPrefix],
+  ]
+  for (const [kind, prefix] of families) {
+    if (!branch.startsWith(prefix) || branch.length === prefix.length) continue
+    const slug = branch.slice(prefix.length)
+    return { kind, slug, version: kind === 'feature' ? undefined : parseVersion(slug) }
+  }
+  return undefined
+}
+
+/** Leading semver in a branch slug (`1.2.0`, `v1.2.0-rc.1`), if it has one. */
+function parseVersion(slug: string): string | undefined {
+  return /^v?(\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?)/.exec(slug)?.[1]
+}
+
+/** A flow slug must be safe as both a branch segment and a tag fragment. */
+function assertFlowSlug(slug: string): void {
+  if (slug.length === 0) throw new GitError('git/invalid-input', 'a branch name is required')
+  if (slug.startsWith('-')) throw new GitError('git/invalid-input', 'a branch name cannot start with -')
+  if (/[\s\u0000-\u001f\u007f~^:?*[\\]/.test(slug) || slug.includes('..') || slug.includes('//')) {
+    throw new GitError('git/invalid-input', `invalid branch name: ${slug}`)
+  }
+  if (/[.@{}]$/.test(slug) || slug.endsWith('.lock')) {
+    throw new GitError('git/invalid-input', `invalid branch name: ${slug}`)
+  }
+}
+
+/** A version destined for `package.json` and a tag: digits and dots, optional prerelease. */
+function assertVersion(version: string): void {
+  if (!/^\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?$/.test(version)) {
+    throw new GitError('git/invalid-input', `invalid version: ${version}`)
+  }
 }

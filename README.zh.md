@@ -5,13 +5,15 @@
 DeepSeek Harness 工作区 Git 插件：在输入框工具行放一个分支胶囊，点开能看分支、切分支、新建分支，并在面板里勾选文件提交 —— 提交信息由当前会话的模型根据改动自动生成。
 
 ```
-输入框工具行:  [⑂ feature/login  3]  ← 点击
+输入框工具行:  [⑂ feature/login  3]  ← 点击（旁边有 Feature 类型徽标）
                  ├ 搜索分支
                  ├ 本地分支 · 2      ✓ feature/login
                  │                   main
                  ├ 新建分支…
                  ├ 提交…                （有改动时可用）
-                 └ 刷新状态
+                 ├ 刷新状态
+                 ├ 启动 Git Flow 分支…
+                 └ 完成 Git Flow 分支…   （在 flow 分支上且工作区干净时可用）
 ```
 
 ## 安装
@@ -128,9 +130,34 @@ dsh 的 profile 目录本身就是一个 pnpm workspace（`pnpm-workspace.yaml` 
 | `pushTimeoutMs` | 120000 | `git push` 超时（等远端） |
 | `messageMaxDiffBytes` | 65536 | 喂给模型的 diff 字节上限，超出截断 |
 | `messageLanguage` | `en` | 提交信息默认语言，`zh` / `en` |
+| `productionBranch` | `main` | 生产分支名；老仓库用 `master` 时改这里 |
+| `developBranch` | `develop` | 集成分支名 |
+| `featurePrefix` | `feature/` | 功能分支前缀 |
+| `releasePrefix` | `release/` | 发布分支前缀 |
+| `hotfixPrefix` | `hotfix/` | 热修复分支前缀 |
+| `tagPrefix` | `v` | 发布/热修复打完合并后打的标签前缀 |
 
 提交面板的「生成提交信息」旁有 `English | 中文` 切换，它覆盖本次调用的 `messageLanguage`，并把选择记在 `localStorage`——
 不选就一直默认英文。
+
+## Git Flow
+
+胶囊菜单最下方的「启动 Git Flow 分支」「完成 Git Flow 分支」按标准 git flow 走：功能与发布分支从 `develop` 切出，
+热修复从生产分支切出；完成后 `--no-ff` 合并回去。
+
+| 类型 | 从哪切出 | 完成后合并到 | 打标签 + 改版本号 |
+|---|---|---|---|
+| `feature/` | `develop` | `develop` | 否 |
+| `release/` | `develop` | 生产分支 + `develop` | 是 |
+| `hotfix/` | 生产分支 | 生产分支 + `develop` | 是 |
+
+完成顺序：合并 → 打标签 → 提交 `package.json` 的 `version` → 推送分支与标签 → 删除本地分支。
+
+- 仓库还没有 `develop` 时，「启动」会引导一键从生产分支（或当前分支）创建。
+- 合并、打标签、改版本号这些完成后不会自动回滚；推送失败会明确提示「本地已完成，但推送失败」，本地成果保留。
+- 能提前拦下的失败都在任何写操作之前检查：工作区不干净、标签已存在、目标分支不存在。
+- 合并冲突时保留冲突现场让你手动解决，不自动 `--abort` 丢弃改动。
+- 仓库根目录没有 `package.json`（非 Node 项目）时自动跳过改版本号这一步。
 
 ## 安全边界
 
@@ -150,7 +177,8 @@ dsh 的 profile 目录本身就是一个 pnpm workspace（`pnpm-workspace.yaml` 
 ```
 src/
 ├── index.ts       宿主半入口（默认导出 GitFlow 服务）
-├── service.ts     GitFlow：status / branches / checkout / createBranch / commit / discard / push / generateMessage
+├── service.ts     GitFlow：status / branches / checkout / createBranch / commit / discard / push / pull / generateMessage
+│                 + gitflowState / startFlow / initDevelop / finishFlow
 ├── git.ts         GitRunner：subprocess + 净化 env + 超时 + porcelain v2 解析
 ├── routes.ts      /api/dsh-git-flow/*（仅挂载在有 webServer 的 profile）
 ├── message.ts     提交信息：ctx.llm.stream 走会话自己的 provider/model，失败退模板
@@ -160,6 +188,7 @@ src/
     ├── BranchChip.tsx 状态、菜单、弹窗、toast 的容器
     ├── BranchMenu.tsx 分支胶囊 + 锚定菜单
     ├── CommitDialog.tsx 提交面板 / 新建分支 / 强制切换与放弃更改的确认
+    ├── GitFlowDialog.tsx 启动 flow 分支 / 引导创建 develop / 完成 flow 分支
     ├── api.ts         fetch 包装 + 错误码到文案
     ├── styles.ts      弹层宽度、文件行省略所需的少量 CSS（唯一需要真 CSS 的地方）
     └── locales.ts     zh/en 字典（en 按 zh 收窄，缺键即编译错误）

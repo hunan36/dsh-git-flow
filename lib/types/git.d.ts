@@ -6,7 +6,7 @@
  */
 import type { SubprocessRuntime } from '@deepseek-ai/dsh-subprocess';
 /** Structured failure codes; the browser half turns them into copy. */
-export type GitErrorCode = 'git/not-installed' | 'git/not-a-repository' | 'git/timeout' | 'git/failed' | 'git/dirty-worktree' | 'git/detached-head' | 'git/invalid-input' | 'git/no-files-selected' | 'git/no-route';
+export type GitErrorCode = 'git/not-installed' | 'git/not-a-repository' | 'git/timeout' | 'git/failed' | 'git/dirty-worktree' | 'git/detached-head' | 'git/invalid-input' | 'git/no-files-selected' | 'git/no-route' | 'git/develop-missing' | 'git/merge-conflict' | 'git/tag-exists' | 'git/gitflow-branch-required';
 /** A git operation that cannot be represented as a normal exit code. */
 export declare class GitError extends Error {
     readonly code: GitErrorCode;

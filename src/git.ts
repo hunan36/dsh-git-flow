@@ -17,6 +17,10 @@ export type GitErrorCode =
   | 'git/invalid-input'
   | 'git/no-files-selected'
   | 'git/no-route'
+  | 'git/develop-missing'
+  | 'git/merge-conflict'
+  | 'git/tag-exists'
+  | 'git/gitflow-branch-required'
 
 /** A git operation that cannot be represented as a normal exit code. */
 export class GitError extends Error {

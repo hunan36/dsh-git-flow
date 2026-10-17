@@ -7,7 +7,7 @@
 import { Service } from '@deepseek-ai/cordis';
 import type { Context } from '@deepseek-ai/cordis';
 import z from '@deepseek-ai/schemastery';
-import type { GitBranchesView, GitCommitView, GitMessageView, GitStatusView, MessageLanguage } from './contract.ts';
+import type { GitBranchesView, GitCommitView, GitFlowFinishView, GitFlowKind, GitFlowStateView, GitMessageView, GitStatusView, MessageLanguage } from './contract.ts';
 export type { MessageLanguage };
 /** Mountable configuration. */
 export interface GitFlowConfig {
@@ -19,6 +19,15 @@ export interface GitFlowConfig {
     messageMaxDiffBytes?: number;
     /** Default commit message language; the commit panel can override it per call. */
     messageLanguage?: MessageLanguage;
+    /** Branch every release and hotfix is merged back into. */
+    productionBranch?: string;
+    /** Integration branch features start from and merge back into. */
+    developBranch?: string;
+    featurePrefix?: string;
+    releasePrefix?: string;
+    hotfixPrefix?: string;
+    /** Prefix of the tag a finished release or hotfix creates. */
+    tagPrefix?: string;
 }
 /**
  * Branch switching, panel-scoped commits, pushes, and AI commit messages for
@@ -96,6 +105,52 @@ export declare class GitFlow extends Service {
      * @returns git's pull summary.
      */
     pull(sessionId: string): Promise<string>;
+    /** The resolved branch layout, as the panel renders it. */
+    private layout;
+    /**
+     * Describe the flow state of the current branch: which family it belongs to,
+     * the version its name carries, whether the branches a run needs exist, and
+     * whether the tag a finish would create is already taken.
+     * @param sessionId - session whose workspace backs the repository.
+     */
+    gitflowState(sessionId: string): Promise<GitFlowStateView>;
+    /**
+     * Create a flow branch from the branch its family starts at and switch to it.
+     * A missing develop is reported as `git/develop-missing` so the panel can
+     * offer to create it rather than dead-ending on a raw git failure.
+     * @param sessionId - session whose workspace backs the repository.
+     * @param kind - branch family to start.
+     * @param name - name inside the family, without the prefix.
+     */
+    startFlow(sessionId: string, kind: GitFlowKind, name: string): Promise<GitStatusView>;
+    /**
+     * Create the develop branch from the production branch and switch to it.
+     * Only offered when develop is missing; an existing one is left untouched.
+     * @param sessionId - session whose workspace backs the repository.
+     */
+    initDevelop(sessionId: string): Promise<GitStatusView>;
+    /**
+     * Finish the current flow branch: merge it back (`--no-ff`), tag a release or
+     * hotfix, write its version, push, and delete the branch.
+     *
+     * Every check that can fail without side effects runs first: the worktree is
+     * clean, the merge would not conflict, and the tag is free. Past that point
+     * steps are not rolled back, because each one is a committed fact; a failure
+     * reports which step stopped the run and leaves the repository as it stands.
+     * @param sessionId - session whose workspace backs the repository.
+     * @param version - `package.json` version to write, release and hotfix only.
+     */
+    finishFlow(sessionId: string, version?: string): Promise<GitFlowFinishView>;
+    /** Merge one branch into a target with a merge commit, refusing on conflict. */
+    private mergeInto;
+    /** Push each merged target and the new tag; the first failure is reported, not thrown. */
+    private pushFinished;
+    /** Write `version` into the root `package.json`; a non-Node repo skips it. */
+    private writeVersion;
+    /** Version currently declared by the root package.json, when there is one. */
+    private currentVersion;
+    private countAhead;
+    private tagExists;
     /**
      * Ask the session's own model route for a commit message over the selected diff.
      * @param sessionId - session whose workspace and route back the call.

@@ -75,6 +75,29 @@ export function registerGitFlowRoutes(ctx: Context, service: GitFlow): () => voi
       }
       return service.generateMessage(sessionId, stringArray(files, 'files'), language)
     }) }),
+    ctx.webServer.register({ kind: 'exact', path: `${BASE}/gitflow`, handler: (req, res) => handle(req, res, () => {
+      requireMethod(req, 'GET')
+      return service.gitflowState(sessionIdFromQuery(req))
+    }) }),
+    ctx.webServer.register({ kind: 'exact', path: `${BASE}/gitflow/start`, handler: (req, res) => handle(req, res, async (body) => {
+      requireMethod(req, 'POST')
+      const { sessionId, kind, name } = readBody(body)
+      if (kind !== 'feature' && kind !== 'release' && kind !== 'hotfix') {
+        throw new GitError('git/invalid-input', 'kind must be "feature", "release", or "hotfix"')
+      }
+      return service.startFlow(sessionId, kind, requireString(name, 'name'))
+    }) }),
+    ctx.webServer.register({ kind: 'exact', path: `${BASE}/gitflow/init-develop`, handler: (req, res) => handle(req, res, async (body) => {
+      requireMethod(req, 'POST')
+      const { sessionId } = readBody(body)
+      return service.initDevelop(sessionId)
+    }) }),
+    ctx.webServer.register({ kind: 'exact', path: `${BASE}/gitflow/finish`, handler: (req, res) => handle(req, res, async (body) => {
+      requireMethod(req, 'POST')
+      const { sessionId, version } = readBody(body)
+      if (version !== undefined && typeof version !== 'string') throw new GitError('git/invalid-input', 'version must be a string')
+      return service.finishFlow(sessionId, version)
+    }) }),
   ]
   return () => {
     for (const remove of routes.reverse()) remove()
@@ -108,7 +131,9 @@ function requireMethod(req: IncomingMessage, method: 'GET' | 'POST'): void {
 }
 
 function statusFor(code: GitErrorCode): number {
+  // Every flow refusal is a precondition the caller can satisfy, not a server fault.
   if (code === 'git/invalid-input' || code === 'git/no-files-selected' || code === 'git/detached-head' || code === 'git/dirty-worktree') return 400
+  if (code === 'git/develop-missing' || code === 'git/merge-conflict' || code === 'git/tag-exists' || code === 'git/gitflow-branch-required') return 409
   if (code === 'git/not-a-repository' || code === 'git/not-installed' || code === 'git/no-route') return 404
   if (code === 'git/timeout') return 504
   return 500

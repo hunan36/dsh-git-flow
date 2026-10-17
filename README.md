@@ -5,13 +5,15 @@ English | [中文](README.zh.md)
 A DeepSeek Harness workspace git plugin: a branch chip in the composer tool row. Open it to browse branches, switch branches, create one, and commit a checked subset of files — the commit message is written by the session's own model from the diff.
 
 ```
-composer tool row:  [⑂ feature/login  3]  ← click
+composer tool row:  [⑂ feature/login  3]  ← click (a Feature badge sits beside it)
                       ├ Search branches
                       ├ Local branches · 2   ✓ feature/login
                       │                        main
                       ├ New branch…
                       ├ Commit…                (enabled while the tree is dirty)
-                      └ Refresh status
+                      ├ Refresh status
+                      ├ Start git flow branch…
+                      └ Finish git flow branch…  (on a flow branch, with a clean tree)
 ```
 
 ## Install
@@ -129,8 +131,33 @@ Set in `cordis.patch.yml`:
 | `pushTimeoutMs` | 120000 | Deadline for `git push`, which waits on a remote |
 | `messageMaxDiffBytes` | 65536 | Cap on the diff bytes handed to the model (truncated past it) |
 | `messageLanguage` | `en` | Default commit-message language, `zh` or `en` |
+| `productionBranch` | `main` | Production branch name; set `master` for older repos |
+| `developBranch` | `develop` | Integration branch name |
+| `featurePrefix` | `feature/` | Feature branch prefix |
+| `releasePrefix` | `release/` | Release branch prefix |
+| `hotfixPrefix` | `hotfix/` | Hotfix branch prefix |
+| `tagPrefix` | `v` | Tag prefix applied when a release or hotfix finishes |
 
 The commit panel carries an `English | 中文` switch beside "Draft message". It overrides `messageLanguage` for that call and remembers the choice in `localStorage`, so English stays the default until you pick otherwise.
+
+## Git flow
+
+The bottom two rows of the branch menu start and finish standard git-flow branches: features and releases branch off `develop`,
+hotfixes branch off production, and a finish merges back with `--no-ff`.
+
+| Type | Branches off | Merges into | Tag + version bump |
+|---|---|---|---|
+| `feature/` | `develop` | `develop` | no |
+| `release/` | `develop` | production + `develop` | yes |
+| `hotfix/` | production | production + `develop` | yes |
+
+A finish runs: merge, tag, commit the `package.json` `version`, push the branches and tag, delete the local branch.
+
+- When `develop` does not exist yet, "Start" offers to create it from production (or the current branch).
+- Merges, tags, and version commits are not rolled back; a failed push reports "finished locally, but the push failed" and keeps the local result.
+- Everything that can be refused is checked before the first write: a dirty worktree, an existing tag, a missing target branch.
+- A merge conflict is left in place for you to resolve; nothing is aborted on your behalf.
+- A repository without a root `package.json` skips the version step instead of failing.
 
 ## Security boundaries
 
@@ -148,7 +175,8 @@ The commit panel carries an `English | 中文` switch beside "Draft message". It
 ```
 src/
 ├── index.ts       host entry (default-exports the GitFlow service)
-├── service.ts     GitFlow: status / branches / checkout / createBranch / commit / discard / push / generateMessage
+├── service.ts     GitFlow: status / branches / checkout / createBranch / commit / discard / push / pull / generateMessage
+│                  + gitflowState / startFlow / initDevelop / finishFlow
 ├── git.ts         GitRunner: subprocess + scrubbed env + timeout + porcelain v2 parsing
 ├── routes.ts      /api/dsh-git-flow/* (registered only where a webServer exists)
 ├── message.ts     commit message: ctx.llm.stream on the session's own provider/model, template fallback
@@ -158,6 +186,7 @@ src/
     ├── BranchChip.tsx  container: status, menu, dialogs, toast
     ├── BranchMenu.tsx  the chip and its anchored menu
     ├── CommitDialog.tsx commit panel / new branch / forced-switch and discard confirmations
+    ├── GitFlowDialog.tsx start a flow branch / guided develop creation / finish a flow branch
     ├── api.ts          fetch wrapper + error codes to copy
     ├── styles.ts       the few CSS rules the popover width and file-row ellipsis need
     └── locales.ts      zh/en dictionaries (en is typed against zh, so a missing key is a compile error)

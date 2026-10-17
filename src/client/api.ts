@@ -12,6 +12,9 @@ import type {
   GitBranchesView,
   GitCommitView,
   GitErrorCode,
+  GitFlowFinishView,
+  GitFlowStartRequest,
+  GitFlowStateView,
   GitMessageView,
   GitPullView,
   GitPushView,
@@ -43,14 +46,14 @@ export function isSilentError(error: unknown): boolean {
  * commit landed, or files were written while the panel was open. The owner
  * re-reads status so the list catches up instead of failing the same way again.
  */
-const STALE_SELECTION: readonly GitErrorCode[] = ['git/invalid-input', 'git/no-files-selected']
+const STALE_SELECTION: readonly GitErrorCode[] = ['git/invalid-input', 'git/no-files-selected', 'git/tag-exists', 'git/gitflow-branch-required']
 
 /** Whether an error means the checked paths are out of date. */
 export function isStaleSelection(error: unknown): boolean {
   return error instanceof GitApiError && STALE_SELECTION.includes(error.code)
 }
 
-/** Structured codes with dedicated copy; anything else falls back to git's message. */
+/** Codes with dedicated copy; anything else falls back to git's message. */
 const CODED: Partial<Record<GitErrorCode, GitFlowKey>> = {
   'git/not-a-repository': 'error.notRepository',
   'git/not-installed': 'error.notInstalled',
@@ -60,6 +63,10 @@ const CODED: Partial<Record<GitErrorCode, GitFlowKey>> = {
   'git/invalid-input': 'error.invalid',
   'git/no-files-selected': 'error.noFiles',
   'git/no-route': 'error.noRoute',
+  'git/develop-missing': 'error.developMissing',
+  'git/merge-conflict': 'error.mergeConflict',
+  'git/tag-exists': 'error.tagExists',
+  'git/gitflow-branch-required': 'error.gitflowBranchRequired',
 }
 
 /** Human-readable failure text for any thrown value. */
@@ -112,4 +119,8 @@ export const gitApi = {
   push: (body: { sessionId: string }) => post<GitPushView>('/push', body),
   pull: (body: { sessionId: string }) => post<GitPullView>('/pull', body),
   generateMessage: (body: GenerateMessageRequest) => post<GitMessageView>('/generate-message', body),
+  gitflowState: (sessionId: string) => request<GitFlowStateView>(`/gitflow?${query(sessionId)}`),
+  startFlow: (body: GitFlowStartRequest) => post<GitStatusView>('/gitflow/start', body),
+  initDevelop: (body: { sessionId: string }) => post<GitStatusView>('/gitflow/init-develop', body),
+  finishFlow: (body: { sessionId: string; version?: string }) => post<GitFlowFinishView>('/gitflow/finish', body),
 }

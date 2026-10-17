@@ -1,5 +1,5 @@
 import type { TranslateNS } from '@deepseek-ai/dsh-client-ui-slots';
-import type { GitBranchesView, GitStatusView } from '../contract.ts';
+import type { GitBranchesView, GitFlowStateView, GitStatusView } from '../contract.ts';
 /** Branch popover props. */
 export interface BranchMenuProps {
     t: TranslateNS<'gitFlow'>;
@@ -18,6 +18,10 @@ export interface BranchMenuProps {
     /** Pull the current branch's upstream (`--ff-only`). */
     onPull: () => void;
     onRefresh: () => void;
+    /** Flow state of the current branch; absent until it has been read. */
+    flow: GitFlowStateView | undefined;
+    onStartFlow: () => void;
+    onFinishFlow: () => void;
 }
 /** Pill plus anchored branch picker: pinned search, scrolling rows, pinned actions. */
 export declare function BranchMenu(props: BranchMenuProps): import("react").JSX.Element;

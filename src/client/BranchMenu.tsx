@@ -26,7 +26,7 @@ import {
   useDismissOnOutsidePointer,
 } from '@deepseek-ai/dsh-client-ui-primitives'
 import type { TranslateNS } from '@deepseek-ai/dsh-client-ui-slots'
-import type { GitBranchesView, GitStatusView } from '../contract.ts'
+import type { GitBranchesView, GitFlowStateView, GitStatusView } from '../contract.ts'
 
 /** One rendered row: a group heading or a branch. */
 interface Row {
@@ -55,6 +55,10 @@ export interface BranchMenuProps {
   /** Pull the current branch's upstream (`--ff-only`). */
   onPull: () => void
   onRefresh: () => void
+  /** Flow state of the current branch; absent until it has been read. */
+  flow: GitFlowStateView | undefined
+  onStartFlow: () => void
+  onFinishFlow: () => void
 }
 
 /** Pill plus anchored branch picker: pinned search, scrolling rows, pinned actions. */
@@ -135,6 +139,9 @@ export function BranchMenu(props: BranchMenuProps) {
           >
             <IconBranchOutlineRegular size={14} />
             <span style={nameStyle}>{status.head}</span>
+            {props.flow?.kind !== undefined && (
+              <span style={flowBadgeStyle}>{t(`flow.${props.flow.kind}` as const)}</span>
+            )}
             {status.behind > 0 && (
               <span style={{ ...badgeBase, background: 'var(--dsw-alias-state-business-primary, #4176e6)' }}>
                 <IconDownloadOutlineRegular size={10} />
@@ -240,6 +247,25 @@ export function BranchMenu(props: BranchMenuProps) {
               props.onOpenChange(false)
               props.onRefresh()
             }} />
+            <ActionRow
+              icon={<IconBranchOutlineRegular size={14} />}
+              label={t('menu.startFlow')}
+              disabled={status.detached}
+              onClick={() => {
+                props.onOpenChange(false)
+                props.onStartFlow()
+              }}
+            />
+            <ActionRow
+              icon={<IconCheckOutlineRegular size={14} />}
+              label={t('menu.finishFlow')}
+              // Finish needs a flow branch and a clean tree; the dialog re-checks both.
+              disabled={props.flow?.kind === undefined || status.files.length > 0}
+              onClick={() => {
+                props.onOpenChange(false)
+                props.onFinishFlow()
+              }}
+            />
           </div>
         </div>,
         document.body,
@@ -429,4 +455,14 @@ const badgeBase: CSSProperties = {
   fontSize: 11,
   lineHeight: '16px',
   color: 'var(--dsw-alias-label-primary-inverted, #ffffff)',
+}
+/** Flow-family tag next to the chip name; neutral so it never competes with the counts. */
+const flowBadgeStyle: CSSProperties = {
+  flex: '0 0 auto',
+  padding: '0 5px',
+  borderRadius: 6,
+  fontSize: 10,
+  lineHeight: '15px',
+  color: 'var(--dsw-alias-label-secondary, currentColor)',
+  background: 'var(--dsw-alias-bg-layer-2, rgba(127,127,127,0.14))',
 }

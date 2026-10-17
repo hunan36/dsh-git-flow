@@ -5,9 +5,10 @@
 import { useCallback, useEffect, useState } from 'react'
 import { IconWarningOutlineRegular, Toast } from '@deepseek-ai/dsh-client-ui-primitives'
 import type { TranslateNS } from '@deepseek-ai/dsh-client-ui-slots'
-import type { GitBranchesView, GitStatusView } from '../contract.ts'
+import type { GitBranchesView, GitFlowStateView, GitStatusView } from '../contract.ts'
 import { BranchMenu } from './BranchMenu.tsx'
 import { CommitDialog, CreateBranchDialog, ForceCheckoutDialog } from './CommitDialog.tsx'
+import { FinishFlowDialog, InitDevelopDialog, StartFlowDialog } from './GitFlowDialog.tsx'
 import { errorText, GitApiError, gitApi, isSilentError } from './api.ts'
 
 /** Props the session-scoped slot delivers to this entry. */
@@ -21,6 +22,9 @@ type Dialog =
   | { kind: 'commit' }
   | { kind: 'new' }
   | { kind: 'force'; branch: string }
+  | { kind: 'start' }
+  | { kind: 'finish' }
+  | { kind: 'init-develop'; thenStart?: boolean }
 
 /** One transient banner; `seq` keys the Toast so a repeat restarts its cycle. */
 interface Banner {
@@ -34,6 +38,7 @@ export function GitFlowChip({ sessionId, t }: GitFlowChipProps) {
   const [status, setStatus] = useState<GitStatusView | undefined>(undefined)
   const [hidden, setHidden] = useState(false)
   const [branches, setBranches] = useState<GitBranchesView | undefined>(undefined)
+  const [flow, setFlow] = useState<GitFlowStateView | undefined>(undefined)
   const [open, setOpen] = useState(false)
   const [busy, setBusy] = useState(false)
   const [dialog, setDialog] = useState<Dialog | undefined>(undefined)
@@ -77,12 +82,26 @@ export function GitFlowChip({ sessionId, t }: GitFlowChipProps) {
       } catch (error) {
         notify(errorText(t, error), true)
       }
+      try {
+        setFlow(await gitApi.gitflowState(sessionId))
+      } catch (error) {
+        // A flow state is an enhancement: a failed read leaves the chip as it was.
+        if (!isSilentError(error)) notify(errorText(t, error), true)
+      }
     })()
   }, [open, sessionId, t, notify, loadStatus])
 
   const refresh = useCallback(() => {
     void loadStatus()
-  }, [loadStatus])
+    // A flow action moves the branch, so the flow state is stale too.
+    void (async () => {
+      try {
+        setFlow(await gitApi.gitflowState(sessionId))
+      } catch {
+        // Same reasoning as the open-time read: never let this block the status.
+      }
+    })()
+  }, [loadStatus, sessionId])
 
   /** Push the current branch's unpushed commits, straight from the menu. */
   const pushCommits = async () => {
@@ -154,6 +173,13 @@ export function GitFlowChip({ sessionId, t }: GitFlowChipProps) {
           setBranches(undefined)
           refresh()
         }}
+        flow={flow}
+        onStartFlow={() => {
+          // The dialog offers to create develop first, but only if the state is current.
+          refresh()
+          setDialog({ kind: 'start' })
+        }}
+        onFinishFlow={() => { setDialog({ kind: 'finish' }) }}
       />
       {dialog?.kind === 'commit' && (
         <CommitDialog
@@ -183,6 +209,42 @@ export function GitFlowChip({ sessionId, t }: GitFlowChipProps) {
           notify={notify}
           refresh={refresh}
           onClose={() => { setDialog(undefined) }}
+        />
+      )}
+      {dialog?.kind === 'start' && flow !== undefined && (
+        <StartFlowDialog
+          t={t}
+          sessionId={sessionId}
+          state={flow}
+          status={status}
+          notify={notify}
+          refresh={refresh}
+          onClose={() => { setDialog(undefined) }}
+          // A start refused for a missing develop reopens as the guided creation.
+          onNeedDevelop={() => { setDialog({ kind: 'init-develop', thenStart: true }) }}
+        />
+      )}
+      {dialog?.kind === 'finish' && flow !== undefined && (
+        <FinishFlowDialog
+          t={t}
+          sessionId={sessionId}
+          state={flow}
+          status={status}
+          notify={notify}
+          refresh={refresh}
+          onClose={() => { setDialog(undefined) }}
+        />
+      )}
+      {dialog?.kind === 'init-develop' && flow !== undefined && (
+        <InitDevelopDialog
+          t={t}
+          sessionId={sessionId}
+          state={flow}
+          status={status}
+          notify={notify}
+          refresh={refresh}
+          onClose={() => { setDialog(undefined) }}
+          onDone={() => { if (dialog.thenStart === true) setDialog({ kind: 'start' }) }}
         />
       )}
       {banner !== undefined && (
