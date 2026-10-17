@@ -25,12 +25,36 @@ Two ways in; either one is enough.
 Sidebar → **Plugins** → **Add plugin**, then put this in "Package or address":
 
 ```
-https://github.com/hunan36/dsh-git-flow
+dsh-git-flow
 ```
 
-Press Install and enable it afterwards ("Enable"). That path runs `pnpm add <spec>` in **the profile serving the page** (usually `web`) and writes this package into `dsh.profile.bundles` for you — you do neither by hand. The URL is accepted with or without the `.git` suffix.
+Press Install and enable it afterwards ("Enable"). That path runs `pnpm add` in **the profile serving the page** (usually `web`) and writes this package into `dsh.profile.bundles` for you — you do neither by hand.
 
-**Reload the page** (⌘⇧R) afterwards so the browser fetches the new client bundle; if that profile does not have `patchReload: live`, restart `dsh web` once for the host side.
+The GitHub address `https://github.com/hunan36/dsh-git-flow` also works, but `pnpm` pins the dependency to that commit and will not follow new releases. Installing by package name is what makes version comparison and updates possible.
+
+**Restart `dsh web`** afterwards: host-half changes are not hot-reloaded, and the browser fetches the new client bundle on restart.
+
+## Updating
+
+DSH does not auto-update third-party plugins; updating takes one command:
+
+```bash
+pnpm --dir ~/.dsh/profiles/web add dsh-git-flow@latest
+```
+
+Then **restart `dsh web`**. Host-half changes (services and API routes) only apply after a restart; the browser half refetches its bundle then.
+
+Check the installed and latest versions:
+
+```bash
+npm view dsh-git-flow version
+```
+
+Installs by GitHub address are not followed automatically (`pnpm` pinned a commit), so reinstall explicitly to update:
+
+```bash
+pnpm --dir ~/.dsh/profiles/web add github:hunan36/dsh-git-flow#main
+```
 
 ### From the CLI (a dedicated profile is recommended)
 
