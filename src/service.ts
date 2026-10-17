@@ -228,13 +228,21 @@ export class GitFlow extends Service {
     const selected = selectPaths(status.files, files)
     const args = ['add', '-A', '--', ...selected]
     await this.git.runOk(status.repo, args)
-    const result = await this.git.runOk(status.repo, ['commit', '--only', '-m', message, '--', ...selected])
+    // `status` is a snapshot taken when this call started; an agent or editor
+    // may have touched a selected path since. `--only` aborts the whole commit
+    // with "nothing to commit" when *any* pathspec has no net change, so drop
+    // the paths that already match HEAD before committing the rest.
+    const staged = await this.changedInIndex(status.repo, selected)
+    if (staged.length === 0) {
+      throw new GitError('git/invalid-input', 'the selected files have no changes left to commit; refresh the list and try again')
+    }
+    const result = await this.git.runOk(status.repo, ['commit', '--only', '-m', message, '--', ...staged])
     const hash = (await this.git.runOk(status.repo, ['rev-parse', 'HEAD'])).stdout.trim()
     const view: GitCommitView = {
       hash,
       shortHash: hash.slice(0, 7),
       branch: status.head,
-      files: selected.length,
+      files: staged.length,
       pushed: false,
       pushNote: trimOutput(result.stdout),
     }
@@ -349,6 +357,19 @@ export class GitFlow extends Service {
       throw new GitError('git/not-a-repository', 'this session has no registered workspace')
     }
     return match
+  }
+
+  /**
+   * Keep only the selected paths whose staged content differs from HEAD.
+   * `add -A` has just run, so the index is the truth; a path that resolves to
+   * the HEAD blob (reverted, or touched between the status snapshot and now)
+   * would make `commit --only` reject the entire commit.
+   * @returns pathspecs in the same order git reported them, `-z` so a non-ASCII
+   * name is never C-quoted.
+   */
+  private async changedInIndex(repo: string, selected: readonly string[]): Promise<string[]> {
+    const result = await this.git.runOk(repo, ['diff', '--cached', '--name-only', '-z', '--', ...selected])
+    return result.stdout.split('\0').filter(Boolean)
   }
 
   private async hasLocalBranch(repo: string, name: string): Promise<boolean> {

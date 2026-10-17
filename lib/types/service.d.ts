@@ -108,6 +108,15 @@ export declare class GitFlow extends Service {
     /** Repository top level for one session's workspace. */
     private resolveRepo;
     private resolveWorkspace;
+    /**
+     * Keep only the selected paths whose staged content differs from HEAD.
+     * `add -A` has just run, so the index is the truth; a path that resolves to
+     * the HEAD blob (reverted, or touched between the status snapshot and now)
+     * would make `commit --only` reject the entire commit.
+     * @returns pathspecs in the same order git reported them, `-z` so a non-ASCII
+     * name is never C-quoted.
+     */
+    private changedInIndex;
     private hasLocalBranch;
     private remoteBranches;
     private runSwitch;
