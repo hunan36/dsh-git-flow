@@ -99,7 +99,7 @@ npm install -g pnpm        # 装最新的 10.x
 - **用 Node 自带的 npm**：`cd ~/.dsh/profiles/<profile> && npm install https://github.com/hunan36/dsh-git-flow`
 - **直接拷贝**：把整个 `dsh-git-flow` 目录（含 `lib/`）拷进 `<profile>/node_modules/`，适用于离线或纯手工环境
 
-这两种方式都必须**再补一步**：把 `dsh-git-flow` 加进该 profile `package.json` 的 `dsh.profile.bundles`，然后重启 `dsh web` —— 插件页和 `dsh plugin add` 会自动做这一步，手工装则要自己写，否则包在 `node_modules` 里也不会被加载。
+这两种方式都必须**再补一步**：把 `@hunan36/dsh-git-flow` 加进该 profile `package.json` 的 `dsh.profile.bundles`，然后重启 `dsh web` —— 插件页和 `dsh plugin add` 会自动做这一步，手工装则要自己写，否则包在 `node_modules` 里也不会被加载。
 
 ### 让插件页改用 npm（机器上只有 npm）
 
@@ -236,14 +236,14 @@ pnpm build       # tsc -> lib/types/**，tsdown -> lib/index.js + lib/client.js
 产物契约：
 
 - `lib/index.js`：Node ESM，被 cordis loader 直接 import。
-- `lib/client.js`：CJS 工厂包成 `window.__ModuleLoader__.load({ id: "dsh-git-flow", factory: (require) => … })`；
+- `lib/client.js`：CJS 工厂包成 `window.__ModuleLoader__.load({ id: "@hunan36/dsh-git-flow", factory: (require) => … })`（id 取 `package.json` 的 `name`）；
   `react`、`react/jsx-runtime`、`@deepseek-ai/dsh-client-ui-primitives` 保持 external，由页面静态模块表提供。
 
 ## 兼容性
 
 针对 `@deepseek-ai/dsh@0.1.6-alpha.2` 实测开发，peer/devDependencies 锁在该版本。dsh 尚在 alpha，
 `conversation.input.left`、`ctx.webServer.register`、`ctx.slots.inject` 等契约可能在小版本间漂移；
-升级 dsh 后请重跑构建并确认 `lib/client.js` 首行仍是 `window.__ModuleLoader__.load({ id: "dsh-git-flow"`。
+升级 dsh 后请重跑构建并确认 `lib/client.js` 首行仍是 `window.__ModuleLoader__.load({ id: "@hunan36/dsh-git-flow"`。
 
 ## 已知边界
 
@@ -256,7 +256,7 @@ pnpm build       # tsc -> lib/types/**，tsdown -> lib/index.js + lib/client.js
 
 ## 验证记录（0.1.6-alpha.2）
 
-独立 `DSH_HOME` + profile `gitflow-web`（bundles 追加 `dsh-git-flow`）实测：胶囊文本 == `git branch --show-current`；
+独立 `DSH_HOME` + profile `gitflow-web`（bundles 追加 `@hunan36/dsh-git-flow`）实测：胶囊文本 == `git branch --show-current`；
 弹层行数 == 本地分支 + 仅在远端；搜索过滤；切分支后胶囊与工作区文件同步；脏工作区切换被拦下并弹二次确认（`--force` 才丢弃改动）；
 非法分支名报错、合法名创建并切换；勾选单个文件生成 AI 信息（`feat: …`）并只提交该文件（`git log -1 --name-only` 验证）；
 提交并推送后 `git ls-remote` 出现该分支且建立 upstream；非 git 工作区会话里胶囊不渲染；`headless` profile 启动无警告、无路由。

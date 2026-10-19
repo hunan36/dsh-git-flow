@@ -100,7 +100,7 @@ If you would rather not install pnpm at all, the plugin itself does not need it 
 - **Use Node's npm**: `cd ~/.dsh/profiles/<profile> && npm install https://github.com/hunan36/dsh-git-flow`
 - **Copy the directory**: drop the whole `dsh-git-flow` folder (including `lib/`) into `<profile>/node_modules/`, for offline or fully manual setups
 
-Both need one extra step: add `dsh-git-flow` to that profile's `dsh.profile.bundles` in its `package.json`, then restart `dsh web`. The plugin page and `dsh plugin add` do that for you; a manual install does not, and the package stays unloaded even though it sits in `node_modules`.
+Both need one extra step: add `@hunan36/dsh-git-flow` to that profile's `dsh.profile.bundles` in its `package.json`, then restart `dsh web`. The plugin page and `dsh plugin add` do that for you; a manual install does not, and the package stays unloaded even though it sits in `node_modules`.
 
 ### Point the plugin page at npm (a machine that only has npm)
 
@@ -234,11 +234,11 @@ After editing `src/`, run **`pnpm build` and commit `lib/` along with it**, or e
 Artifact contract:
 
 - `lib/index.js`: Node ESM, imported directly by the cordis loader.
-- `lib/client.js`: a CJS factory wrapped as `window.__ModuleLoader__.load({ id: "dsh-git-flow", factory: (require) => … })`; `react`, `react/jsx-runtime`, and `@deepseek-ai/dsh-client-ui-primitives` stay external and come from the page's static module table.
+- `lib/client.js`: a CJS factory wrapped as `window.__ModuleLoader__.load({ id: "@hunan36/dsh-git-flow", factory: (require) => … })` (the id is `package.json`'s `name`); `react`, `react/jsx-runtime`, and `@deepseek-ai/dsh-client-ui-primitives` stay external and come from the page's static module table.
 
 ## Compatibility
 
-Developed and verified against `@deepseek-ai/dsh@0.1.6-alpha.2`, with peer and dev dependencies pinned to it. dsh is still alpha, so contracts such as `conversation.input.left`, `ctx.webServer.register`, and `ctx.slots.inject` may drift between minor versions. After upgrading dsh, rebuild and confirm the first line of `lib/client.js` is still `window.__ModuleLoader__.load({ id: "dsh-git-flow"`.
+Developed and verified against `@deepseek-ai/dsh@0.1.6-alpha.2`, with peer and dev dependencies pinned to it. dsh is still alpha, so contracts such as `conversation.input.left`, `ctx.webServer.register`, and `ctx.slots.inject` may drift between minor versions. After upgrading dsh, rebuild and confirm the first line of `lib/client.js` is still `window.__ModuleLoader__.load({ id: "@hunan36/dsh-git-flow"`.
 
 ## Known limits
 
@@ -251,4 +251,4 @@ Developed and verified against `@deepseek-ai/dsh@0.1.6-alpha.2`, with peer and d
 
 ## Verification (0.1.6-alpha.2)
 
-Measured on an isolated `DSH_HOME` with profile `gitflow-web` (`dsh-git-flow` appended to `dsh.profile.bundles`): the chip text equals `git branch --show-current`; the menu lists every local branch plus each remote-only one; search filters rows; switching moves both the chip and the worktree files; a dirty switch is refused and only confirms `--force` after a second dialog; an invalid branch name errors while a valid one is created and switched to; with a single file checked, the model returned a `feat: …` message and `git log -1 --name-only` showed only that file; commit-and-push made the branch appear in `git ls-remote` with its upstream set; a session whose workspace is not a repository renders no chip; the `headless` profile boots with no warning and no routes.
+Measured on an isolated `DSH_HOME` with profile `gitflow-web` (`@hunan36/dsh-git-flow` appended to `dsh.profile.bundles`): the chip text equals `git branch --show-current`; the menu lists every local branch plus each remote-only one; search filters rows; switching moves both the chip and the worktree files; a dirty switch is refused and only confirms `--force` after a second dialog; an invalid branch name errors while a valid one is created and switched to; with a single file checked, the model returned a `feat: …` message and `git log -1 --name-only` showed only that file; commit-and-push made the branch appear in `git ls-remote` with its upstream set; a session whose workspace is not a repository renders no chip; the `headless` profile boots with no warning and no routes.
