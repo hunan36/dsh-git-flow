@@ -173,6 +173,15 @@ export declare class GitFlow extends Service {
      */
     private changedInIndex;
     private hasLocalBranch;
+    /**
+     * Turn a branch row's name into something `git switch` accepts. Remote-only
+     * rows are labelled `<remote>/<branch>` because that is their short refname,
+     * but git refuses to switch to a remote ref directly; stripping the prefix
+     * lets {@link checkout} create the local tracking branch instead. Only a
+     * known remote is peeled off, and only when no real local branch has that
+     * exact name.
+     */
+    private unqualifiedName;
     private remoteBranches;
     private runSwitch;
 }

@@ -178,17 +178,29 @@ export class GitFlow extends Service {
   async checkout(sessionId: string, name: string, force = false): Promise<GitStatusView> {
     const repo = await this.resolveRepo(sessionId)
     assertBranchName(name)
+    // The menu labels remote-only rows with their remote prefix (`origin/x`),
+    // but `git switch origin/x` fails with "a branch is expected, got remote
+    // branch". Peel the prefix so the `-c --track` path below can create the
+    // local branch; a real local branch keeps precedence, even one that is
+    // literally named `origin/x`.
+    const target = await this.unqualifiedName(repo, name)
     const args = ['switch']
     if (force) args.push('--force')
-    if (await this.hasLocalBranch(repo, name)) {
-      args.push(name)
+    if (await this.hasLocalBranch(repo, target)) {
+      args.push(target)
     } else {
-      const remotes = await this.remoteBranches(repo, name)
-      if (remotes.length > 1) {
-        throw new GitError('git/invalid-input', `branch ${name} exists on multiple remotes: ${remotes.join(', ')}`)
+      const remotes = await this.remoteBranches(repo, target)
+      // A row labelled `<remote>/<branch>` names its remote, so prefer that ref
+      // when the branch also lives on another remote; only a bare name that
+      // matches several remotes is genuinely ambiguous.
+      const tracking = remotes.includes(name) ? name : remotes.length === 1 ? remotes[0] : undefined
+      if (tracking !== undefined) {
+        args.push('-c', target, '--track', tracking)
+      } else if (remotes.length > 1) {
+        throw new GitError('git/invalid-input', `branch ${target} exists on multiple remotes: ${remotes.join(', ')}`)
+      } else {
+        args.push(target)
       }
-      if (remotes.length === 1) args.push('-c', name, '--track', remotes[0])
-      else args.push(name)
     }
     await this.runSwitch(repo, args)
     return this.status(sessionId)
@@ -649,6 +661,22 @@ export class GitFlow extends Service {
   private async hasLocalBranch(repo: string, name: string): Promise<boolean> {
     const result = await this.git.run(repo, ['show-ref', '--verify', '--quiet', `refs/heads/${name}`])
     return result.exitCode === 0
+  }
+
+  /**
+   * Turn a branch row's name into something `git switch` accepts. Remote-only
+   * rows are labelled `<remote>/<branch>` because that is their short refname,
+   * but git refuses to switch to a remote ref directly; stripping the prefix
+   * lets {@link checkout} create the local tracking branch instead. Only a
+   * known remote is peeled off, and only when no real local branch has that
+   * exact name.
+   */
+  private async unqualifiedName(repo: string, name: string): Promise<string> {
+    if (await this.hasLocalBranch(repo, name)) return name
+    const slash = name.indexOf('/')
+    if (slash <= 0) return name
+    const remotes = (await this.git.runOk(repo, ['remote'])).stdout.split('\n').map((line) => line.trim()).filter(Boolean)
+    return remotes.includes(name.slice(0, slash)) ? name.slice(slash + 1) : name
   }
 
   private async remoteBranches(repo: string, name: string): Promise<string[]> {
