@@ -3,7 +3,7 @@
  * session; the host resolves the repository.
  */
 import type { TranslateNS } from '@deepseek-ai/dsh-client-ui-slots';
-import type { CheckoutRequest, DiscardRequest, CreateBranchRequest, CommitRequest, GenerateMessageRequest, GitBranchesView, GitCommitView, GitErrorCode, GitFlowFinishView, GitFlowStartRequest, GitFlowStateView, GitMergeView, GitMessageView, GitPullView, GitPushView, GitStatusView, MergeRequest } from '../contract.ts';
+import type { CheckoutRequest, DiscardRequest, CreateBranchRequest, CommitRequest, DeleteBranchRequest, FetchRequest, GenerateMessageRequest, GitBranchesView, GitCommitView, GitErrorCode, GitFetchView, GitFlowFinishView, GitFlowStartRequest, GitFlowStateView, GitMergeView, GitMessageView, GitPullView, GitPushView, GitRemotesView, GitStatusView, MergeRequest, PushBranchRequest, RebaseRequest, RenameBranchRequest } from '../contract.ts';
 /** A git operation refused by the host, carrying its structured code. */
 export declare class GitApiError extends Error {
     readonly code: GitErrorCode;
@@ -19,9 +19,13 @@ export declare function errorText(t: TranslateNS<'gitFlow'>, error: unknown): st
 export declare const gitApi: {
     status: (sessionId: string) => Promise<GitStatusView>;
     branches: (sessionId: string) => Promise<GitBranchesView>;
+    remotes: (sessionId: string) => Promise<GitRemotesView>;
     checkout: (body: CheckoutRequest) => Promise<GitStatusView>;
     createBranch: (body: CreateBranchRequest) => Promise<GitStatusView>;
     merge: (body: MergeRequest) => Promise<GitMergeView>;
+    /** Replay the current branch onto `onto`; the status comes back after the run. */
+    rebase: (body: RebaseRequest) => Promise<GitStatusView>;
+    fetch: (body: FetchRequest) => Promise<GitFetchView>;
     commit: (body: CommitRequest) => Promise<GitCommitView>;
     discard: (body: DiscardRequest) => Promise<GitStatusView>;
     push: (body: {
@@ -30,6 +34,9 @@ export declare const gitApi: {
     pull: (body: {
         sessionId: string;
     }) => Promise<GitPullView>;
+    pushBranch: (body: PushBranchRequest) => Promise<GitPushView>;
+    renameBranch: (body: RenameBranchRequest) => Promise<GitStatusView>;
+    deleteBranch: (body: DeleteBranchRequest) => Promise<GitStatusView>;
     generateMessage: (body: GenerateMessageRequest) => Promise<GitMessageView>;
     gitflowState: (sessionId: string) => Promise<GitFlowStateView>;
     startFlow: (body: GitFlowStartRequest) => Promise<GitStatusView>;

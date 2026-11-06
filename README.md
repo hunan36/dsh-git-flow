@@ -9,7 +9,8 @@ composer tool row:  [⑂ feature/login  3]  ← click (a Feature badge sits besi
                       ├ Search branches
                       ├ Local branches · 2   ✓ feature/login
                       │                        main
-                      │                        ↳ right-click: Checkout / Merge into current
+                      │                        ↳ right-click: Checkout · Merge · Rebase · Fetch
+                      │                          Push · Rename · Delete · Copy name
                       ├ New branch…
                       ├ Commit…                (enabled while the tree is dirty)
                       ├ Refresh status
@@ -168,7 +169,8 @@ The commit panel carries an `English | 中文` switch beside "Draft message". It
 
 ## Merging a branch
 
-Right-click a branch row (or press the keyboard menu key / `Shift+F10` while it is focused) to get two actions:
+Right-click a branch row (or press the keyboard menu key / `Shift+F10` while it is focused) to get the branch actions below. This section
+covers checkout and merge; rebase, fetch, push, rename, delete, and copy live in [Branch actions](#branch-actions).
 
 - **Checkout** — the same switch as a left click, including the dirty-worktree confirmation.
 - **Merge into the current branch** — runs `git merge --no-edit <branch>` on the current branch; nothing is pushed.
@@ -176,6 +178,28 @@ Right-click a branch row (or press the keyboard menu key / `Shift+F10` while it 
 A merge that can fast-forward does; a diverged branch produces a normal merge commit with git's default message. The toast reports which happened. A remote-only row merges its `origin/…` ref without creating a local branch.
 
 A conflict is **not** aborted: the conflict markers, the index and `MERGE_HEAD` stay in the worktree, and the chip starts showing the conflicted files. Resolve them and commit the merge yourself — from a terminal or by asking the session. The commit panel only makes partial commits (`git commit --only`), which git refuses while a merge is in progress. If local edits would be overwritten, the merge fails with `git/dirty-worktree` and the worktree is left untouched. Merging the current branch into itself and merging into a detached HEAD are both refused.
+
+## Branch actions
+
+The same right-click menu covers the rest of SourceTree's local-branch actions. They act on the **selected** branch (except rebase, which always replays the current branch onto the selected one):
+
+| Action | What it runs |
+|---|---|
+| Rebase current changes onto `<branch>` | `git rebase <branch>` — the current branch's commits are replayed on top of it, so its history is rewritten |
+| Fetch `<branch>` | `git fetch <remote>` for the branch's remote; a remote-only row fetches its own remote |
+| Push to `<upstream>` (tracked) | `git push <remote> <branch>:<tracked branch>` for that branch |
+| Push to… | pick a remote and a destination branch: `git push --set-upstream <remote> <branch>:<destination>` |
+| Rename… | `git branch -m` for a local branch (the upstream config moves with it) |
+| Delete `<branch>` | `git branch -d`; a not-fully-merged branch asks for confirmation and retries with `-D` |
+| Copy branch name | copies the name to the clipboard |
+
+Remote-only rows offer checkout, merge, rebase and fetch (they merge/fetch their `origin/…` ref), plus copy; rename, delete and push are
+disabled because there is no local branch. The checked-out branch cannot be deleted, checked out again, merged into itself, or rebased onto
+itself.
+
+A rebase conflict stops where git stopped: the rebase stays in progress, the chip shows the conflicted files, and the user finishes it with
+`git rebase --continue` (or `git rebase --abort`) from a terminal — the plugin never aborts or force-continues. Fetch and push are the only
+network actions in this menu, and both run only when clicked.
 
 ## Git flow
 
@@ -203,6 +227,7 @@ A finish runs: merge, tag, commit the `package.json` `version`, push the branche
 - `push` never passes `--force` or `--force-with-lease`, and only pushes the current branch's upstream (with `--set-upstream <remote> HEAD:refs/heads/<branch>` when it has none).
 - Commits stage only the files checked in the panel. An empty selection answers `git/no-files-selected` and never falls back to an implicit `git add -A`.
 - A merge runs only `git merge --no-edit <name>` against the current branch, with a branch name the browser sent. It never passes `--no-ff`/`--force`/`-X`, never pushes, and never aborts a conflicted merge.
+- Branch actions run exactly one fixed git subcommand each: `git rebase <branch>`, `git fetch <remote>`, `git push <remote> <branch>:refs/heads/<dest>`, `git branch -m <from> <to>`, `git branch -d|-D <branch>`. Remote names are only accepted when they appear in `git remote`; fetch never prunes or resets; the checked-out branch can never be deleted; a `-D` force delete is only sent after the unmerged-branch warning and a second confirmation.
 - Switching branches on a dirty worktree fails by default (`git/dirty-worktree`). Only the user's second confirmation in the dialog sends `--force`.
 - Discarding runs only after the destructive action is picked in a confirmation dialog: tracked paths go back to HEAD with `git restore --source=HEAD --staged --worktree`, untracked paths are removed with `git clean -fd` (no `-x`, so ignored files stay), and a conflicted path is refused rather than guessed at.
 - `workspaceRegistry` is read lazily through `ctx.get('workspaceRegistry')` instead of being declared in `static inject`, so a profile without one (the shipped `headless` profile) still activates this entry rather than leaving a permanently pending plugin; every git call there answers `git/not-a-repository`.
@@ -213,7 +238,8 @@ A finish runs: merge, tag, commit the `package.json` `version`, push the branche
 ```
 src/
 ├── index.ts       host entry (default-exports the GitFlow service)
-├── service.ts     GitFlow: status / branches / checkout / createBranch / merge / commit / discard / push / pull / generateMessage
+├── service.ts     GitFlow: status / branches / checkout / createBranch / merge / rebase / fetch / push / pushBranch /
+│                  renameBranch / deleteBranch / remotes / commit / discard / pull / generateMessage
 │                  + gitflowState / startFlow / initDevelop / finishFlow
 ├── git.ts         GitRunner: subprocess + scrubbed env + timeout + porcelain v2 parsing
 ├── routes.ts      /api/dsh-git-flow/* (registered only where a webServer exists)
@@ -223,6 +249,7 @@ src/
     ├── index.ts        slots.inject('conversation.input.left') + locale registration
     ├── BranchChip.tsx  container: status, menu, dialogs, toast
     ├── BranchMenu.tsx  the chip and its anchored menu
+    ├── BranchActionsDialog.tsx rebase confirmation / rename / delete (force) / push-to-remote dialogs
     ├── CommitDialog.tsx commit panel / new branch / forced-switch and discard confirmations
     ├── GitFlowDialog.tsx start a flow branch / guided develop creation / finish a flow branch
     ├── api.ts          fetch wrapper + error codes to copy

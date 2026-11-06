@@ -19,8 +19,10 @@ export type GitErrorCode =
   | 'git/no-route'
   | 'git/develop-missing'
   | 'git/merge-conflict'
+  | 'git/rebase-conflict'
   | 'git/tag-exists'
   | 'git/gitflow-branch-required'
+  | 'git/branch-not-merged'
 
 /** A git operation that cannot be represented as a normal exit code. */
 export class GitError extends Error {

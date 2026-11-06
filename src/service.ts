@@ -11,7 +11,7 @@ import type { Workspace } from '@deepseek-ai/dsh-workspace'
 import z from '@deepseek-ai/schemastery'
 import { readFile, writeFile } from 'node:fs/promises'
 import * as nodePath from 'node:path'
-import type { GitBranchesView, GitBranchView, GitCommitView, GitFileView, GitFlowConfigView, GitFlowFinishView, GitFlowKind, GitFlowStateView, GitMergeView, GitMessageView, GitStatusView, MessageLanguage } from './contract.ts'
+import type { GitBranchesView, GitBranchView, GitCommitView, GitFetchView, GitFileView, GitFlowConfigView, GitFlowFinishView, GitFlowKind, GitFlowStateView, GitMergeView, GitMessageView, GitPushView, GitRemotesView, GitStatusView, MessageLanguage } from './contract.ts'
 import { describeFailure, GitError, GitRunner, parseStatus, type GitResult } from './git.ts'
 import { generateCommitMessage } from './message.ts'
 import { registerGitFlowRoutes } from './routes.ts'
@@ -273,6 +273,156 @@ export class GitFlow extends Service {
       commit: head.slice(0, 7),
       summary,
     }
+  }
+
+  /**
+   * Fetch one branch's remote, so its remote-tracking refs catch up.
+   *
+   * The remote is resolved from the branch itself — a local branch's tracking
+   * config, or the `<remote>/<branch>` prefix of a remote-only row — and the
+   * whole remote is fetched, which is a harmless superset of that one ref.
+   * @param sessionId - session whose workspace backs the repository.
+   * @param name - local branch, or a remote-tracking ref such as `origin/develop`.
+   */
+  async fetch(sessionId: string, name: string): Promise<GitFetchView> {
+    const status = await this.status(sessionId)
+    assertBranchName(name)
+    const repo = status.repo
+    const remotes = await this.remoteNames(repo)
+    if (remotes.length === 0) throw new GitError('git/invalid-input', 'this repository has no remote to fetch from')
+    const remote = await this.remoteForFetch(repo, name, remotes)
+    const result = await this.remoteGit.runOk(repo, ['fetch', remote])
+    return { remote, summary: trimOutput(`${result.stdout}\n${result.stderr}`) }
+  }
+
+  /**
+   * Replay the current branch's commits onto another branch.
+   *
+   * A conflict is reported and left in place: the rebase stops exactly where
+   * git stopped, so the user resolves it and runs `git rebase --continue` (or
+   * `--abort`) instead of the plugin guessing which way to go.
+   * @param sessionId - session whose workspace backs the repository.
+   * @param onto - branch or remote-tracking ref the current branch lands on.
+   */
+  async rebase(sessionId: string, onto: string): Promise<GitStatusView> {
+    const status = await this.status(sessionId)
+    if (status.detached) throw new GitError('git/detached-head', 'there is no current branch to rebase')
+    assertBranchName(onto)
+    if (onto === status.head) throw new GitError('git/invalid-input', `cannot rebase ${status.head} onto itself`)
+    const repo = status.repo
+    const verified = await this.git.run(repo, ['rev-parse', '--verify', '--quiet', `${onto}^{commit}`])
+    if (verified.exitCode !== 0) throw new GitError('git/invalid-input', `branch ${onto} does not exist`)
+    const result = await this.git.run(repo, ['rebase', onto])
+    if (result.exitCode !== 0) {
+      const after = parseStatus((await this.git.runOk(repo, ['status', '--porcelain=v2', '--branch', '-z'])).stdout)
+      if (after.files.some((file) => file.conflicted)) {
+        throw new GitError('git/rebase-conflict', `rebasing ${status.head} onto ${onto} conflicted; resolve the conflicts, then run git rebase --continue (or git rebase --abort)`)
+      }
+      if (worktreeBlocked(result)) throw new GitError('git/dirty-worktree', (result.stderr || result.stdout).trim())
+      throw new GitError('git/failed', describeFailure(['rebase', onto], result))
+    }
+    return this.status(sessionId)
+  }
+
+  /**
+   * Push one local branch to a remote.
+   *
+   * Without `remote` the branch's configured upstream is used (SourceTree's
+   * "Push to <tracked>"); with `remote` the branch is pushed to the same-named
+   * branch there (or `branch`) and starts tracking it.
+   * @param sessionId - session whose workspace backs the repository.
+   * @param name - local branch to push.
+   * @param remote - configured remote; omitted means the branch's upstream.
+   * @param branch - destination branch name; defaults to the tracked one, then `name`.
+   */
+  async pushBranch(sessionId: string, name: string, remote?: string, branch?: string): Promise<GitPushView> {
+    const status = await this.status(sessionId)
+    assertBranchName(name)
+    const repo = status.repo
+    if (!(await this.hasLocalBranch(repo, name))) {
+      throw new GitError('git/invalid-input', `${name} is not a local branch, so it cannot be pushed`)
+    }
+    const remotes = await this.remoteNames(repo)
+    if (remotes.length === 0) throw new GitError('git/invalid-input', 'this repository has no remote to push to')
+    let targetRemote: string
+    let destination = branch
+    if (remote === undefined) {
+      const configured = (await this.git.run(repo, ['config', '--get', `branch.${name}.remote`])).stdout.trim()
+      const mergeRef = (await this.git.run(repo, ['config', '--get', `branch.${name}.merge`])).stdout.trim()
+      if (configured.length === 0 || mergeRef.length === 0) {
+        throw new GitError('git/invalid-input', `branch ${name} has no upstream; choose a remote to push to`)
+      }
+      if (!remotes.includes(configured)) throw new GitError('git/invalid-input', `remote ${configured} is not configured`)
+      targetRemote = configured
+      destination ??= mergeRef.startsWith('refs/heads/') ? mergeRef.slice('refs/heads/'.length) : undefined
+    } else {
+      if (!remotes.includes(remote)) throw new GitError('git/invalid-input', `remote ${remote} does not exist`)
+      targetRemote = remote
+    }
+    const destBranch = destination ?? name
+    assertBranchName(destBranch)
+    const args = ['push']
+    if (remote !== undefined) args.push('--set-upstream')
+    args.push(targetRemote, `${name}:refs/heads/${destBranch}`)
+    const result = await this.remoteGit.runOk(repo, args)
+    return { pushed: true, pushNote: trimOutput(`${result.stdout}\n${result.stderr}`) }
+  }
+
+  /**
+   * Rename a local branch. The upstream config moves with it, as git does.
+   * @param sessionId - session whose workspace backs the repository.
+   * @param from - existing local branch.
+   * @param to - new local branch name.
+   */
+  async renameBranch(sessionId: string, from: string, to: string): Promise<GitStatusView> {
+    const status = await this.status(sessionId)
+    assertBranchName(from)
+    assertBranchName(to)
+    if (from === to) throw new GitError('git/invalid-input', 'the new branch name equals the old one')
+    const repo = status.repo
+    if (!(await this.hasLocalBranch(repo, from))) throw new GitError('git/invalid-input', `branch ${from} does not exist locally`)
+    if (await this.hasLocalBranch(repo, to)) throw new GitError('git/invalid-input', `branch ${to} already exists`)
+    await this.git.runOk(repo, ['branch', '-m', from, to])
+    return this.status(sessionId)
+  }
+
+  /**
+   * Delete a local branch with `-d`; an unmerged branch answers
+   * `git/branch-not-merged` so the browser can ask before forcing `-D`.
+   * @param sessionId - session whose workspace backs the repository.
+   * @param name - local branch to delete; the checked-out branch is refused.
+   * @param force - delete even when the branch is not fully merged.
+   */
+  async deleteBranch(sessionId: string, name: string, force = false): Promise<GitStatusView> {
+    const status = await this.status(sessionId)
+    assertBranchName(name)
+    if (name === status.head) throw new GitError('git/invalid-input', `cannot delete the checked-out branch ${name}`)
+    const repo = status.repo
+    if (!(await this.hasLocalBranch(repo, name))) throw new GitError('git/invalid-input', `branch ${name} does not exist locally`)
+    const flag = force ? '-D' : '-d'
+    const result = await this.git.run(repo, ['branch', flag, name])
+    if (result.exitCode !== 0) {
+      const detail = (result.stderr || result.stdout).trim()
+      if (/not fully merged/i.test(detail)) throw new GitError('git/branch-not-merged', detail)
+      if (/used by worktree|checked out/i.test(detail)) throw new GitError('git/invalid-input', detail)
+      throw new GitError('git/failed', describeFailure(['branch', flag, name], result))
+    }
+    return this.status(sessionId)
+  }
+
+  /**
+   * The configured remotes with the URL each fetch uses, in git's own order.
+   * @param sessionId - session whose workspace backs the repository.
+   */
+  async remotes(sessionId: string): Promise<GitRemotesView> {
+    const status = await this.status(sessionId)
+    const result = await this.git.runOk(status.repo, ['remote', '-v'])
+    const byName = new Map<string, string>()
+    for (const line of result.stdout.split('\n')) {
+      const match = /^(\S+)\t(.*) \(fetch\)$/.exec(line)
+      if (match !== null && !byName.has(match[1])) byName.set(match[1], match[2])
+    }
+    return { head: status.head, remotes: [...byName].map(([name, url]) => ({ name, url })) }
   }
 
   /**
@@ -730,6 +880,27 @@ export class GitFlow extends Service {
     return result.stdout.split('\n').map((line) => line.trim()).filter(Boolean)
   }
 
+  /** Configured remote names, in git's order. */
+  private async remoteNames(repo: string): Promise<string[]> {
+    const result = await this.git.runOk(repo, ['remote'])
+    return result.stdout.split('\n').map((line) => line.trim()).filter(Boolean)
+  }
+
+  /**
+   * The remote a fetch of `name` should refresh: a local branch's tracking
+   * remote, the prefix of a remote-only ref, then the repository's default.
+   */
+  private async remoteForFetch(repo: string, name: string, remotes: readonly string[]): Promise<string> {
+    if (await this.hasLocalBranch(repo, name)) {
+      const configured = (await this.git.run(repo, ['config', '--get', `branch.${name}.remote`])).stdout.trim()
+      if (remotes.includes(configured)) return configured
+    }
+    for (const remote of remotes) {
+      if (name.startsWith(`${remote}/`)) return remote
+    }
+    return remotes.includes('origin') ? 'origin' : remotes[0]
+  }
+
   private async runSwitch(repo: string, args: readonly string[]): Promise<void> {
     const result = await this.git.run(repo, args)
     if (result.exitCode === 0) return
@@ -739,9 +910,9 @@ export class GitFlow extends Service {
   }
 }
 
-/** git's own wording when local edits prevent a switch or a merge. */
+/** git's own wording when local edits prevent a switch, merge, or rebase. */
 function worktreeBlocked(result: GitResult): boolean {
-  return /local changes|would be overwritten|not clean|Your index contains staged changes|Please commit your changes or stash/i
+  return /local changes|would be overwritten|not clean|Your index contains staged changes|Please commit your changes or stash|cannot rebase|unstaged changes|stash them|uncommitted changes/i
     .test(`${result.stderr}\n${result.stdout}`)
 }
 

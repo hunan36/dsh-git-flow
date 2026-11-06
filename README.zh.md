@@ -2,14 +2,15 @@
 
 [English](README.md) | 中文
 
-DeepSeek Harness 工作区 Git 插件：在输入框工具行放一个分支胶囊，点开能看分支、切分支、右键把分支合并到当前分支、新建分支，并在面板里勾选文件提交 —— 提交信息由当前会话的模型根据改动自动生成。
+DeepSeek Harness 工作区 Git 插件：在输入框工具行放一个分支胶囊，点开能看分支、切分支、右键检出/合并/变基/拿来/推送/重命名/删除分支、新建分支，并在面板里勾选文件提交 —— 提交信息由当前会话的模型根据改动自动生成。
 
 ```
 输入框工具行:  [⑂ feature/login  3]  ← 点击（旁边有 Feature 类型徽标）
                  ├ 搜索分支
                  ├ 本地分支 · 2      ✓ feature/login
                  │                   main
-                 │                   ↳ 右键：检出 / 合并到当前分支
+                 │                   ↳ 右键：检出 · 合并 · 变基 · 拿来
+                 │                     推送 · 重命名 · 删除 · 复制分支名
                  ├ 新建分支…
                  ├ 提交…                （有改动时可用）
                  ├ 刷新状态
@@ -168,7 +169,8 @@ dsh 的 profile 目录本身就是一个 pnpm workspace（`pnpm-workspace.yaml` 
 
 ## 合并分支
 
-在分支行上点右键（或在行聚焦时按键盘菜单键 / `Shift+F10`），会弹出两个动作：
+在分支行上点右键（或在行聚焦时按键盘菜单键 / `Shift+F10`）会弹出全套分支操作。本节只讲检出与合并，变基、拿来、推送、
+重命名、删除、复制见 [分支操作](#分支操作)。
 
 - **检出** —— 与左键点击相同，脏工作区时同样先弹「强制切换」确认。
 - **合并到当前分支** —— 对当前分支执行 `git merge --no-edit <分支>`，不推送。
@@ -176,6 +178,26 @@ dsh 的 profile 目录本身就是一个 pnpm workspace（`pnpm-workspace.yaml` 
 能快进就快进；分叉了则生成一个带 git 默认信息的普通合并提交，toast 会说明是哪一种。右键「仅在远端」的行时，直接合并它的 `origin/…` 引用，不会创建本地分支。
 
 冲突**不会**被 abort：冲突标记、索引和 `MERGE_HEAD` 都留在工作区，胶囊随即开始显示冲突文件数。解决冲突后自己提交完成合并 —— 可以在终端里提交，或让会话执行。提交面板只做部分提交（`git commit --only`），git 在合并进行中会拒绝。若本地改动会被覆盖，合并会以 `git/dirty-worktree` 失败，工作区原样不动。把当前分支合并到自己、以及在游离 HEAD 上合并，都会被拒绝。
+
+## 分支操作
+
+同一个右键菜单覆盖 SourceTree 里本地分支的其余操作。除变基外，它们都作用于**选中的那个分支**（变基永远是把当前分支重放到选中的分支上）：
+
+| 动作 | 实际执行的命令 |
+|---|---|
+| 将当前变更变基到 `<分支>` | `git rebase <分支>` —— 当前分支的提交被重放到它之上，提交历史会被改写 |
+| 拿来 `<分支>` | 对该分支所属远端执行 `git fetch <remote>`；「仅在远端」行就 fetch 它自己的远端 |
+| 推送到 `<上游>`（已跟踪） | 对该分支执行 `git push <remote> <分支>:<跟踪的分支>` |
+| 推送到… | 选择仓库和目标分支：`git push --set-upstream <remote> <分支>:<目标分支>` |
+| 重命名… | 本地分支 `git branch -m`，上游配置随之迁移 |
+| 删除 `<分支>` | `git branch -d`；分支未完全合并时先弹二次确认，再以 `-D` 重试 |
+| 复制分支名字 | 把分支名写入剪贴板 |
+
+「仅在远端」行提供检出、合并、变基、拿来和复制（合并/变基/拿来都用它的 `origin/…` 引用），重命名、删除、推送因没有本地分支而禁用。
+当前分支不能被删除、重复检出、合并到自己、变基到自己。
+
+变基冲突会停在 git 停下的地方：rebase 保持进行中、胶囊显示冲突文件，用户在终端执行 `git rebase --continue`（或 `git rebase --abort`）
+结束——插件不会替你 abort，也不会强制 continue。fetch 和 push 是菜单里仅有的两个网络动作，且只在你点击时执行。
 
 ## Git Flow
 
@@ -203,6 +225,7 @@ dsh 的 profile 目录本身就是一个 pnpm workspace（`pnpm-workspace.yaml` 
 - `push` 永不带 `--force` / `--force-with-lease`，只推当前分支的上游（无上游时 `--set-upstream <remote> HEAD:refs/heads/<branch>`）。
 - 提交只 `git add` 面板里勾选的文件；一个都没勾返回 `git/no-files-selected`，绝不隐式 `git add -A`。
 - 合并只对当前分支执行 `git merge --no-edit <分支名>`，分支名来自浏览器；不传 `--no-ff` / `--force` / `-X`，不推送，也绝不自动 abort 冲突合并。
+- 每个分支操作只执行一条固定的 git 子命令：`git rebase <分支>`、`git fetch <remote>`、`git push <remote> <分支>:refs/heads/<目标>`、`git branch -m`、`git branch -d|-D`。remote 名必须出现在 `git remote` 列表里；fetch 从不 prune / reset；当前分支永远不可删除；`-D` 强制删除只在「未合并」警告之后再确认一次才会发出。
 - 脏工作区切分支默认失败（`git/dirty-worktree`），只有用户在二次确认框里点「强制切换」才带 `--force`。
 - 放弃更改只在确认框里点了「放弃更改」才执行：已跟踪路径用 `git restore --source=HEAD --staged --worktree` 回到 HEAD，未跟踪路径用 `git clean -fd` 删除（不带 `-x`，被忽略的文件不动）；有冲突的文件直接拒绝，不做猜测。
 - `workspaceRegistry` 用 `ctx.get('workspaceRegistry')` 惰性读取，而不是写进 `static inject`：headless 之类的 profile 没有它，
@@ -215,8 +238,9 @@ dsh 的 profile 目录本身就是一个 pnpm workspace（`pnpm-workspace.yaml` 
 ```
 src/
 ├── index.ts       宿主半入口（默认导出 GitFlow 服务）
-├── service.ts     GitFlow：status / branches / checkout / createBranch / merge / commit / discard / push / pull / generateMessage
-│                 + gitflowState / startFlow / initDevelop / finishFlow
+├── service.ts     GitFlow：status / branches / checkout / createBranch / merge / rebase / fetch / push / pushBranch /
+│                  renameBranch / deleteBranch / remotes / commit / discard / pull / generateMessage
+│                  + gitflowState / startFlow / initDevelop / finishFlow
 ├── git.ts         GitRunner：subprocess + 净化 env + 超时 + porcelain v2 解析
 ├── routes.ts      /api/dsh-git-flow/*（仅挂载在有 webServer 的 profile）
 ├── message.ts     提交信息：ctx.llm.stream 走会话自己的 provider/model，失败退模板
@@ -225,6 +249,7 @@ src/
     ├── index.ts       slots.inject('conversation.input.left') + locale 注册
     ├── BranchChip.tsx 状态、菜单、弹窗、toast 的容器
     ├── BranchMenu.tsx 分支胶囊 + 锚定菜单
+    ├── BranchActionsDialog.tsx 变基确认 / 重命名 / 删除（强制）/ 推送到指定仓库的弹窗
     ├── CommitDialog.tsx 提交面板 / 新建分支 / 强制切换与放弃更改的确认
     ├── GitFlowDialog.tsx 启动 flow 分支 / 引导创建 develop / 完成 flow 分支
     ├── api.ts         fetch 包装 + 错误码到文案

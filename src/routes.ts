@@ -48,6 +48,37 @@ export function registerGitFlowRoutes(ctx: Context, service: GitFlow): () => voi
       const { sessionId, name } = readBody(body)
       return service.merge(sessionId, requireString(name, 'name'))
     }) }),
+    ctx.webServer.register({ kind: 'exact', path: `${BASE}/remotes`, handler: (req, res) => handle(req, res, () => {
+      requireMethod(req, 'GET')
+      return service.remotes(sessionIdFromQuery(req))
+    }) }),
+    ctx.webServer.register({ kind: 'exact', path: `${BASE}/rebase`, handler: (req, res) => handle(req, res, async (body) => {
+      requireMethod(req, 'POST')
+      const { sessionId, onto } = readBody(body)
+      return service.rebase(sessionId, requireString(onto, 'onto'))
+    }) }),
+    ctx.webServer.register({ kind: 'exact', path: `${BASE}/fetch`, handler: (req, res) => handle(req, res, async (body) => {
+      requireMethod(req, 'POST')
+      const { sessionId, name } = readBody(body)
+      return service.fetch(sessionId, requireString(name, 'name'))
+    }) }),
+    ctx.webServer.register({ kind: 'exact', path: `${BASE}/push-branch`, handler: (req, res) => handle(req, res, async (body) => {
+      requireMethod(req, 'POST')
+      const { sessionId, name, remote, branch } = readBody(body)
+      if (remote !== undefined && typeof remote !== 'string') throw new GitError('git/invalid-input', 'remote must be a string')
+      if (branch !== undefined && typeof branch !== 'string') throw new GitError('git/invalid-input', 'branch must be a string')
+      return service.pushBranch(sessionId, requireString(name, 'name'), remote, branch)
+    }) }),
+    ctx.webServer.register({ kind: 'exact', path: `${BASE}/rename-branch`, handler: (req, res) => handle(req, res, async (body) => {
+      requireMethod(req, 'POST')
+      const { sessionId, from, to } = readBody(body)
+      return service.renameBranch(sessionId, requireString(from, 'from'), requireString(to, 'to'))
+    }) }),
+    ctx.webServer.register({ kind: 'exact', path: `${BASE}/delete-branch`, handler: (req, res) => handle(req, res, async (body) => {
+      requireMethod(req, 'POST')
+      const { sessionId, name, force } = readBody(body)
+      return service.deleteBranch(sessionId, requireString(name, 'name'), force === true)
+    }) }),
     ctx.webServer.register({ kind: 'exact', path: `${BASE}/commit`, handler: (req, res) => handle(req, res, async (body) => {
       requireMethod(req, 'POST')
       const { sessionId, files, message, push } = readBody(body)
@@ -138,7 +169,7 @@ function requireMethod(req: IncomingMessage, method: 'GET' | 'POST'): void {
 function statusFor(code: GitErrorCode): number {
   // Every flow refusal is a precondition the caller can satisfy, not a server fault.
   if (code === 'git/invalid-input' || code === 'git/no-files-selected' || code === 'git/detached-head' || code === 'git/dirty-worktree') return 400
-  if (code === 'git/develop-missing' || code === 'git/merge-conflict' || code === 'git/tag-exists' || code === 'git/gitflow-branch-required') return 409
+  if (code === 'git/develop-missing' || code === 'git/merge-conflict' || code === 'git/rebase-conflict' || code === 'git/tag-exists' || code === 'git/gitflow-branch-required' || code === 'git/branch-not-merged') return 409
   if (code === 'git/not-a-repository' || code === 'git/not-installed' || code === 'git/no-route') return 404
   if (code === 'git/timeout') return 504
   return 500

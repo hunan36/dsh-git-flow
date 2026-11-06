@@ -5,7 +5,7 @@
  * @module dsh-git-flow/contract
  */
 /** Structured failure codes, mirrored by the browser dictionary. */
-export type GitErrorCode = 'git/not-installed' | 'git/not-a-repository' | 'git/timeout' | 'git/failed' | 'git/dirty-worktree' | 'git/detached-head' | 'git/invalid-input' | 'git/no-files-selected' | 'git/no-route' | 'git/develop-missing' | 'git/merge-conflict' | 'git/tag-exists' | 'git/gitflow-branch-required';
+export type GitErrorCode = 'git/not-installed' | 'git/not-a-repository' | 'git/timeout' | 'git/failed' | 'git/dirty-worktree' | 'git/detached-head' | 'git/invalid-input' | 'git/no-files-selected' | 'git/no-route' | 'git/develop-missing' | 'git/merge-conflict' | 'git/rebase-conflict' | 'git/tag-exists' | 'git/gitflow-branch-required' | 'git/branch-not-merged';
 /** One changed path, as rendered in the commit panel. */
 export interface GitFileView {
     /** Repository-relative path; the new name for a rename. */
@@ -85,6 +85,24 @@ export interface GitMergeView {
     /** Short hash the current branch now points at; absent when up to date. */
     commit?: string;
     /** git's own summary, trimmed to its last lines. */
+    summary: string;
+}
+/** One configured remote, as listed by `git remote -v`. */
+export interface GitRemoteView {
+    name: string;
+    /** Fetch URL; the push URL is not exposed because the plugin never differs them. */
+    url: string;
+}
+/** `GET /api/dsh-git-flow/remotes`. */
+export interface GitRemotesView {
+    head: string;
+    remotes: GitRemoteView[];
+}
+/** `POST /api/dsh-git-flow/fetch`. */
+export interface GitFetchView {
+    /** Remote that was fetched. */
+    remote: string;
+    /** git's own summary, trimmed; empty when there was nothing new. */
     summary: string;
 }
 /** `POST /api/dsh-git-flow/generate-message`. */
@@ -211,6 +229,44 @@ export interface MergeRequest {
     sessionId: string;
     /** Local branch name, or a remote-tracking ref such as `origin/develop`. */
     name: string;
+}
+/** `POST /api/dsh-git-flow/rebase`: replay the current branch onto `onto`. */
+export interface RebaseRequest {
+    sessionId: string;
+    /** Branch or remote-tracking ref the current branch is replayed onto. */
+    onto: string;
+}
+/** `POST /api/dsh-git-flow/fetch`: refresh a branch's remote refs. */
+export interface FetchRequest {
+    sessionId: string;
+    /** Local branch name, or a remote-tracking ref such as `origin/develop`. */
+    name: string;
+}
+/** `POST /api/dsh-git-flow/push-branch`: push one local branch to a remote. */
+export interface PushBranchRequest {
+    sessionId: string;
+    /** Local branch to push. */
+    name: string;
+    /** Remote to push to; omitted means the branch's configured upstream. */
+    remote?: string;
+    /** Destination branch on that remote; defaults to the tracked branch, then `name`. */
+    branch?: string;
+}
+/** `POST /api/dsh-git-flow/rename-branch`: rename a local branch. */
+export interface RenameBranchRequest {
+    sessionId: string;
+    /** Existing local branch. */
+    from: string;
+    /** New local branch name. */
+    to: string;
+}
+/** `POST /api/dsh-git-flow/delete-branch`: delete a local branch. */
+export interface DeleteBranchRequest {
+    sessionId: string;
+    /** Local branch to delete; the checked-out branch is refused. */
+    name: string;
+    /** Delete even when the branch is not fully merged (`git branch -D`). */
+    force?: boolean;
 }
 /** `POST /api/dsh-git-flow/discard`: throw the selected paths back to HEAD. */
 export interface DiscardRequest {

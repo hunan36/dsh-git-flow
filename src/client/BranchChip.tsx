@@ -3,9 +3,10 @@
  * the three dialog surfaces, and the toast. Everything below it is presentational.
  */
 import { useCallback, useEffect, useState } from 'react'
-import { IconWarningOutlineRegular, Toast } from '@deepseek-ai/dsh-client-ui-primitives'
+import { IconWarningOutlineRegular, Toast, writeClipboard } from '@deepseek-ai/dsh-client-ui-primitives'
 import type { TranslateNS } from '@deepseek-ai/dsh-client-ui-slots'
-import type { GitBranchesView, GitFlowStateView, GitMergeMode, GitStatusView } from '../contract.ts'
+import type { GitBranchesView, GitFlowStateView, GitMergeMode, GitRemotesView, GitStatusView } from '../contract.ts'
+import { DeleteBranchDialog, PushToDialog, RebaseDialog, RenameBranchDialog } from './BranchActionsDialog.tsx'
 import { BranchMenu } from './BranchMenu.tsx'
 import { CommitDialog, CreateBranchDialog, ForceCheckoutDialog } from './CommitDialog.tsx'
 import { FinishFlowDialog, InitDevelopDialog, StartFlowDialog } from './GitFlowDialog.tsx'
@@ -26,6 +27,10 @@ type Dialog =
   | { kind: 'start' }
   | { kind: 'finish' }
   | { kind: 'init-develop'; thenStart?: boolean }
+  | { kind: 'rebase'; onto: string }
+  | { kind: 'rename'; branch: string }
+  | { kind: 'delete'; branch: string }
+  | { kind: 'push-to'; branch: string }
 
 /** One transient banner; `seq` keys the Toast so a repeat restarts its cycle. */
 interface Banner {
@@ -50,6 +55,7 @@ export function GitFlowChip({ sessionId, t }: GitFlowChipProps) {
   const [status, setStatus] = useState<GitStatusView | undefined>(undefined)
   const [hidden, setHidden] = useState(false)
   const [branches, setBranches] = useState<GitBranchesView | undefined>(undefined)
+  const [remotes, setRemotes] = useState<GitRemotesView | undefined>(undefined)
   const [flow, setFlow] = useState<GitFlowStateView | undefined>(undefined)
   const [open, setOpen] = useState(false)
   const [busy, setBusy] = useState(false)
@@ -93,6 +99,13 @@ export function GitFlowChip({ sessionId, t }: GitFlowChipProps) {
         setBranches(await gitApi.branches(sessionId))
       } catch (error) {
         notify(errorText(t, error), true)
+      }
+      try {
+        setRemotes(await gitApi.remotes(sessionId))
+      } catch (error) {
+        // Remote-backed actions are an enhancement: a failed read leaves the
+        // menu without the push-to entry instead of blocking the popover.
+        if (!isSilentError(error)) notify(errorText(t, error), true)
       }
       try {
         setFlow(await gitApi.gitflowState(sessionId))
@@ -161,6 +174,41 @@ export function GitFlowChip({ sessionId, t }: GitFlowChipProps) {
     }
   }
 
+  /** Fetch the remote that tracks a branch, straight from its row menu. */
+  const fetchBranch = async (name: string) => {
+    setBusy(true)
+    try {
+      const result = await gitApi.fetch({ sessionId, name })
+      notify(t('fetch.done', { branch: name, remote: result.remote }))
+      // Remote refs moved, so behind counts and remote-only rows are stale.
+      refresh()
+    } catch (error) {
+      notify(errorText(t, error), true)
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  /** Push one local branch to its configured upstream. */
+  const pushTracked = async (name: string, upstream: string) => {
+    setBusy(true)
+    try {
+      await gitApi.pushBranch({ sessionId, name })
+      notify(t('pushTracked.done', { branch: name, upstream }))
+      refresh()
+    } catch (error) {
+      notify(errorText(t, error), true)
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  /** Copy a branch name, reporting whichever way the clipboard went. */
+  const copyBranchName = async (name: string) => {
+    const copied = await writeClipboard(name)
+    notify(copied ? t('menu.contextCopyDone', { branch: name }) : t('menu.contextCopyFail'), !copied)
+  }
+
   const checkout = async (name: string) => {
     if (name === status?.head) return
     setBusy(true)
@@ -185,11 +233,19 @@ export function GitFlowChip({ sessionId, t }: GitFlowChipProps) {
         t={t}
         status={status}
         branches={branches}
+        remotes={remotes}
         busy={busy}
         open={open}
         onOpenChange={setOpen}
         onSelectBranch={(name) => { void checkout(name) }}
         onMergeBranch={(name) => { void mergeBranch(name) }}
+        onRebaseBranch={(name) => { setDialog({ kind: 'rebase', onto: name }) }}
+        onFetchBranch={(name) => { void fetchBranch(name) }}
+        onPushTracked={(name, upstream) => { void pushTracked(name, upstream) }}
+        onPushBranchTo={(name) => { setDialog({ kind: 'push-to', branch: name }) }}
+        onRenameBranch={(name) => { setDialog({ kind: 'rename', branch: name }) }}
+        onDeleteBranch={(name) => { setDialog({ kind: 'delete', branch: name }) }}
+        onCopyBranchName={(name) => { void copyBranchName(name) }}
         onNewBranch={() => { setDialog({ kind: 'new' }) }}
         onCommit={() => {
           // The panel lists whatever status it was opened with, and files can
@@ -276,6 +332,48 @@ export function GitFlowChip({ sessionId, t }: GitFlowChipProps) {
           refresh={refresh}
           onClose={() => { setDialog(undefined) }}
           onDone={() => { if (dialog.thenStart === true) setDialog({ kind: 'start' }) }}
+        />
+      )}
+      {dialog?.kind === 'rebase' && (
+        <RebaseDialog
+          t={t}
+          sessionId={sessionId}
+          head={status.head}
+          onto={dialog.onto}
+          notify={notify}
+          refresh={refresh}
+          onClose={() => { setDialog(undefined) }}
+        />
+      )}
+      {dialog?.kind === 'rename' && (
+        <RenameBranchDialog
+          t={t}
+          sessionId={sessionId}
+          branch={dialog.branch}
+          notify={notify}
+          refresh={refresh}
+          onClose={() => { setDialog(undefined) }}
+        />
+      )}
+      {dialog?.kind === 'delete' && (
+        <DeleteBranchDialog
+          t={t}
+          sessionId={sessionId}
+          branch={dialog.branch}
+          notify={notify}
+          refresh={refresh}
+          onClose={() => { setDialog(undefined) }}
+        />
+      )}
+      {dialog?.kind === 'push-to' && (
+        <PushToDialog
+          t={t}
+          sessionId={sessionId}
+          branch={dialog.branch}
+          remotes={remotes}
+          notify={notify}
+          refresh={refresh}
+          onClose={() => { setDialog(undefined) }}
         />
       )}
       {banner !== undefined && (

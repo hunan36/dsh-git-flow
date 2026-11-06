@@ -13,6 +13,7 @@ import type { CSSProperties, ReactNode } from 'react'
 import {
   IconBranchOutlineRegular,
   IconCheckOutlineRegular,
+  IconCopyOutlineRegular,
   IconDownloadOutlineRegular,
   IconEditOutlineRegular,
   IconPlusOutlineRegular,
@@ -20,13 +21,14 @@ import {
   IconRightUpOutlineRegular,
   IconSearchOutlineRegular,
   IconSparkleRegular,
+  IconTrashOutlineRegular,
   Input,
   Pill,
   Tooltip,
   useDismissOnOutsidePointer,
 } from '@deepseek-ai/dsh-client-ui-primitives'
 import type { TranslateNS } from '@deepseek-ai/dsh-client-ui-slots'
-import type { GitBranchesView, GitFlowStateView, GitStatusView } from '../contract.ts'
+import type { GitBranchesView, GitFlowStateView, GitRemotesView, GitStatusView } from '../contract.ts'
 
 /** One rendered row: a group heading or a branch. */
 interface Row {
@@ -35,6 +37,19 @@ interface Row {
   label: string
   /** Present on branch rows; remote-only rows carry their `origin/…` name. */
   name?: string
+  /** Tracking upstream of a local branch, when it has one. */
+  upstream?: string
+  /** True when only a remote-tracking ref carries this name. */
+  remoteOnly?: boolean
+}
+
+/** A branch row the context menu was opened for, plus where to anchor it. */
+interface ContextTarget {
+  name: string
+  upstream: string | undefined
+  remoteOnly: boolean
+  x: number
+  y: number
 }
 
 /** Branch popover props. */
@@ -43,6 +58,8 @@ export interface BranchMenuProps {
   status: GitStatusView
   /** Branch table, loaded on first open. */
   branches: GitBranchesView | undefined
+  /** Configured remotes, loaded on first open; absent when the read failed. */
+  remotes: GitRemotesView | undefined
   /** True while a load or switch is in flight; the chip shows a busy state. */
   busy: boolean
   open: boolean
@@ -50,6 +67,20 @@ export interface BranchMenuProps {
   onSelectBranch: (name: string) => void
   /** Merge a branch into the current one, offered from a row's context menu. */
   onMergeBranch: (name: string) => void
+  /** Open the rebase confirmation that replays the current branch onto `name`. */
+  onRebaseBranch: (name: string) => void
+  /** Fetch the remote that tracks `name`, straight from the row menu. */
+  onFetchBranch: (name: string) => void
+  /** Push `name` to its configured upstream, straight from the row menu. */
+  onPushTracked: (name: string, upstream: string) => void
+  /** Open the push-to dialog that chooses a remote and destination branch. */
+  onPushBranchTo: (name: string) => void
+  /** Open the rename prompt for a local branch. */
+  onRenameBranch: (name: string) => void
+  /** Open the delete confirmation for a local branch. */
+  onDeleteBranch: (name: string) => void
+  /** Copy a branch name to the clipboard. */
+  onCopyBranchName: (name: string) => void
   onNewBranch: () => void
   onCommit: () => void
   /** Push what is already committed, without opening the commit panel. */
@@ -73,7 +104,7 @@ export function BranchMenu(props: BranchMenuProps) {
   // should be anchored at. Kept apart from `open` on purpose: opening the
   // context menu closes the popover, and an effect watching `open` would wipe
   // the menu in the same commit.
-  const [context, setContext] = useState<{ name: string; x: number; y: number } | undefined>(undefined)
+  const [context, setContext] = useState<ContextTarget | undefined>(undefined)
 
   // Anchored by its BOTTOM edge, a gap above the chip. `useAnchoredPosition`
   // places by `top`, which cannot work for a panel that opens upward and is
@@ -119,10 +150,17 @@ export function BranchMenu(props: BranchMenuProps) {
   }, [open])
 
   // Opening the context menu gives up the popover; the menu state is a sibling
-  // overlay, so it survives the close.
-  const openContextMenu = (name: string, point: { x: number; y: number }) => {
+  // overlay, so it survives the close. The row's facts travel with it, because
+  // the branch table is gone by the time the menu renders.
+  const openContextMenu = (row: Row, point: { x: number; y: number }) => {
     props.onOpenChange(false)
-    setContext({ name, x: point.x, y: point.y })
+    setContext({
+      name: row.name ?? '',
+      upstream: row.upstream,
+      remoteOnly: row.remoteOnly === true,
+      x: point.x,
+      y: point.y,
+    })
   }
 
   const rows = useMemo(() => buildRows(t, branches, filter), [t, branches, filter])
@@ -218,7 +256,7 @@ export function BranchMenu(props: BranchMenuProps) {
                   title={`${row.name ?? ''} · ${t('menu.contextHint')}`}
                   current={row.name === status.head}
                   disabled={busy}
-                  onContextMenu={(point) => { openContextMenu(row.name ?? '', point) }}
+                  onContextMenu={(point) => { openContextMenu(row, point) }}
                   onSelect={() => {
                     props.onOpenChange(false)
                     props.onSelectBranch(row.name ?? '')
@@ -290,6 +328,9 @@ export function BranchMenu(props: BranchMenuProps) {
           key={`${context.name}:${context.x}:${context.y}`}
           t={t}
           name={context.name}
+          upstream={context.upstream}
+          remoteOnly={context.remoteOnly}
+          remotes={props.remotes}
           current={context.name === status.head}
           currentBranch={status.head}
           detached={status.detached}
@@ -303,6 +344,34 @@ export function BranchMenu(props: BranchMenuProps) {
           onMerge={() => {
             setContext(undefined)
             props.onMergeBranch(context.name)
+          }}
+          onRebase={() => {
+            setContext(undefined)
+            props.onRebaseBranch(context.name)
+          }}
+          onFetch={() => {
+            setContext(undefined)
+            props.onFetchBranch(context.name)
+          }}
+          onPushTracked={(upstream) => {
+            setContext(undefined)
+            props.onPushTracked(context.name, upstream)
+          }}
+          onPushTo={() => {
+            setContext(undefined)
+            props.onPushBranchTo(context.name)
+          }}
+          onRename={() => {
+            setContext(undefined)
+            props.onRenameBranch(context.name)
+          }}
+          onDelete={() => {
+            setContext(undefined)
+            props.onDeleteBranch(context.name)
+          }}
+          onCopy={() => {
+            setContext(undefined)
+            props.onCopyBranchName(context.name)
           }}
           onDismiss={() => { setContext(undefined) }}
         />,
@@ -378,11 +447,17 @@ interface BranchContextMenuProps {
   t: TranslateNS<'gitFlow'>
   /** Branch the menu acts on. */
   name: string
+  /** Tracking upstream of that branch, when it is a local tracking branch. */
+  upstream: string | undefined
+  /** True when the branch exists only as a remote-tracking ref. */
+  remoteOnly: boolean
+  /** Configured remotes, for deciding whether push-to is offered. */
+  remotes: GitRemotesView | undefined
   /** True when that branch is already checked out. */
   current: boolean
   /** Name of the checked-out branch, so a merge can say what it lands in. */
   currentBranch: string
-  /** True when HEAD is detached, so a merge has no current branch to name. */
+  /** True when HEAD is detached, so a merge or rebase has no branch to move. */
   detached: boolean
   busy: boolean
   /** Viewport coordinates the menu was asked for. */
@@ -390,28 +465,43 @@ interface BranchContextMenuProps {
   y: number
   onCheckout: () => void
   onMerge: () => void
+  onRebase: () => void
+  onFetch: () => void
+  onPushTracked: (upstream: string) => void
+  onPushTo: () => void
+  onRename: () => void
+  onDelete: () => void
+  onCopy: () => void
   onDismiss: () => void
 }
 
 /**
- * Right-click menu for one branch row: checkout, or merge into the current
- * branch. Rendered as a sibling overlay of the popover (the popover is closed
- * to reveal it), fixed-positioned at the pointer and clamped into the viewport.
+ * Right-click menu for one branch row, in SourceTree's order: checkout, merge,
+ * rebase onto, fetch — then the tracked and explicit pushes, rename, delete,
+ * and finally copying the name. Rendered as a sibling overlay of the popover
+ * (the popover is closed to reveal it), fixed-positioned at the pointer and
+ * clamped into the viewport; a long menu scrolls inside the room left below.
  */
 function BranchContextMenu(props: BranchContextMenuProps) {
-  const { t, name, current, currentBranch, detached, busy } = props
+  const { t, name, upstream, remoteOnly, remotes, current, currentBranch, detached, busy } = props
   const menuRef = useRef<HTMLDivElement>(null)
-  const [placement, setPlacement] = useState<{ left: number; top: number } | undefined>(undefined)
+  const [placement, setPlacement] = useState<{ left: number; top: number; maxHeight: number } | undefined>(undefined)
 
   // A fixed-position card can only be clamped once it has a size, so the first
-  // frame is laid out but invisible; resize re-clamps it while it is open.
+  // frame is laid out but invisible. `scrollHeight` is the full content height
+  // even while a previous clamp caps the card, so the placement and the height
+  // cap stay stable across resizes.
   useLayoutEffect(() => {
     const place = () => {
       const card = menuRef.current
       if (card === null) return
+      const height = Math.min(card.scrollHeight, Math.max(MENU_MIN_HEIGHT, window.innerHeight - MARGIN * 2))
+      const top = Math.min(Math.max(props.y, MARGIN), Math.max(MARGIN, window.innerHeight - height - MARGIN))
       setPlacement({
         left: Math.min(Math.max(props.x, MARGIN), Math.max(MARGIN, window.innerWidth - card.offsetWidth - MARGIN)),
-        top: Math.min(Math.max(props.y, MARGIN), Math.max(MARGIN, window.innerHeight - card.offsetHeight - MARGIN)),
+        top,
+        // The card scrolls inside whatever room is left under the point.
+        maxHeight: Math.max(MENU_MIN_HEIGHT, window.innerHeight - top - MARGIN),
       })
     }
     place()
@@ -436,6 +526,13 @@ function BranchContextMenu(props: BranchContextMenuProps) {
   const enabledRows = () => Array.from(
     menuRef.current?.querySelectorAll<HTMLButtonElement>('button[role="menuitem"]:not(:disabled)') ?? [],
   )
+
+  // A local branch with no upstream keeps the tracked-push row (disabled) so
+  // the shape of the menu never changes between branches.
+  const trackedLabel = upstream === undefined
+    ? t('menu.contextPushTrackedNone')
+    : t('menu.contextPushTracked', { upstream })
+  const hasRemotes = remotes !== undefined && remotes.remotes.length > 0
 
   return (
     <div
@@ -480,8 +577,66 @@ function BranchContextMenu(props: BranchContextMenuProps) {
         disabled={current || detached || busy}
         onClick={props.onMerge}
       />
+      <MenuItemRow
+        icon={<IconRefreshOutlineRegular size={14} />}
+        label={t('menu.contextRebase', { branch: name })}
+        // Rewrites the current branch, so both ends of the operation must exist.
+        disabled={current || detached || busy}
+        onClick={props.onRebase}
+      />
+      <MenuItemRow
+        icon={<IconDownloadOutlineRegular size={14} />}
+        label={t('menu.contextFetch', { branch: name })}
+        disabled={busy}
+        onClick={props.onFetch}
+      />
+      <MenuSeparator />
+      <MenuItemRow
+        icon={<IconRightUpOutlineRegular size={14} />}
+        label={trackedLabel}
+        // Only a local branch can be pushed, and only to a configured upstream.
+        disabled={remoteOnly || upstream === undefined || busy}
+        onClick={() => {
+          if (upstream !== undefined) props.onPushTracked(upstream)
+        }}
+      />
+      <MenuItemRow
+        icon={<IconRightUpOutlineRegular size={14} />}
+        label={t('menu.contextPushTo')}
+        // A remote-only ref has no local branch to push, and the picker needs remotes.
+        disabled={remoteOnly || !hasRemotes || busy}
+        onClick={props.onPushTo}
+      />
+      <MenuSeparator />
+      <MenuItemRow
+        icon={<IconEditOutlineRegular size={14} />}
+        label={t('menu.contextRename')}
+        // Renaming is local-only, but moving the checked-out branch is fine.
+        disabled={remoteOnly || busy}
+        onClick={props.onRename}
+      />
+      <MenuItemRow
+        icon={<IconTrashOutlineRegular size={14} />}
+        label={t('menu.contextDelete', { branch: name })}
+        // Git refuses to delete the checked-out branch, so it is not offered.
+        disabled={current || remoteOnly || busy}
+        onClick={props.onDelete}
+      />
+      <MenuSeparator />
+      <MenuItemRow
+        icon={<IconCopyOutlineRegular size={14} />}
+        label={t('menu.contextCopy')}
+        // Copying the name is always safe, even mid-operation.
+        disabled={false}
+        onClick={props.onCopy}
+      />
     </div>
   )
+}
+
+/** Hairline between action groups in the branch context menu. */
+function MenuSeparator() {
+  return <div role="separator" style={separatorStyle} />
 }
 
 /** One row of the context menu: the popover's action look, label ellipsized. */
@@ -520,10 +675,22 @@ function buildRows(t: TranslateNS<'gitFlow'>, branches: GitBranchesView | undefi
   }
   group(t('menu.local'), branches.local
     .filter((branch) => !branch.remoteOnly && named(branch.name))
-    .map((branch) => ({ kind: 'branch' as const, key: `local:${branch.name}`, label: branch.name, name: branch.name })))
+    .map((branch) => ({
+      kind: 'branch' as const,
+      key: `local:${branch.name}`,
+      label: branch.name,
+      name: branch.name,
+      upstream: branch.upstream,
+    })))
   group(t('menu.remote'), branches.local
     .filter((branch) => branch.remoteOnly && named(branch.name))
-    .map((branch) => ({ kind: 'branch' as const, key: `remote:${branch.name}`, label: branch.name, name: branch.name })))
+    .map((branch) => ({
+      kind: 'branch' as const,
+      key: `remote:${branch.name}`,
+      label: branch.name,
+      name: branch.name,
+      remoteOnly: true,
+    })))
   return rows
 }
 
@@ -538,6 +705,8 @@ const MARGIN = 12
 /** Height cap on a tall window, and the floor that keeps the card usable. */
 const PANEL_MAX_HEIGHT = 420
 const PANEL_MIN_HEIGHT = 180
+/** Floor for the context menu's clamped scroll area. */
+const MENU_MIN_HEIGHT = 120
 const anchorStyle: CSSProperties = { display: 'inline-flex' }
 const pillStyle: CSSProperties = { gap: 6, maxWidth: 240 }
 const nameStyle: CSSProperties = { overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }
@@ -579,10 +748,13 @@ const contextMenuStyle: CSSProperties = {
   display: 'flex',
   flexDirection: 'column',
   padding: 4,
-  // A menu-like width: wide enough for a branch name, capped so the label
-  // ellipsizes instead of stretching the card past the viewport.
-  minWidth: 220,
-  maxWidth: 340,
+  // A menu-like width: wide enough for the action labels, capped so the copy
+  // ellipsizes instead of stretching the card past the viewport. The card is
+  // taller than the earlier checkout/merge pair, so the placement clamps a
+  // maxHeight and the card scrolls inside it.
+  minWidth: 240,
+  maxWidth: 360,
+  overflowY: 'auto',
   borderRadius: 12,
   // The card itself can take focus when every row is disabled; the browser's
   // focus ring belongs on the rows, not on the surface.
@@ -647,6 +819,13 @@ const actionStyle: CSSProperties = {
   cursor: 'pointer',
 }
 const actionIconStyle: CSSProperties = { display: 'inline-flex', flex: '0 0 auto' }
+/** Hairline between action groups in the branch context menu. */
+const separatorStyle: CSSProperties = {
+  flex: '0 0 auto',
+  height: 1,
+  margin: '4px 4px',
+  background: 'var(--dsw-alias-border-l3, rgba(127,127,127,0.16))',
+}
 /** Context-menu copy: one line, ellipsized when the branch name is long. */
 const contextLabelStyle: CSSProperties = {
   flex: '1 1 auto',

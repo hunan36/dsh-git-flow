@@ -7,7 +7,7 @@
 import { Service } from '@deepseek-ai/cordis';
 import type { Context } from '@deepseek-ai/cordis';
 import z from '@deepseek-ai/schemastery';
-import type { GitBranchesView, GitCommitView, GitFlowFinishView, GitFlowKind, GitFlowStateView, GitMergeView, GitMessageView, GitStatusView, MessageLanguage } from './contract.ts';
+import type { GitBranchesView, GitCommitView, GitFetchView, GitFlowFinishView, GitFlowKind, GitFlowStateView, GitMergeView, GitMessageView, GitPushView, GitRemotesView, GitStatusView, MessageLanguage } from './contract.ts';
 export type { MessageLanguage };
 /** Mountable configuration. */
 export interface GitFlowConfig {
@@ -84,6 +84,58 @@ export declare class GitFlow extends Service {
      * @returns how the current branch moved, and its new tip.
      */
     merge(sessionId: string, name: string): Promise<GitMergeView>;
+    /**
+     * Fetch one branch's remote, so its remote-tracking refs catch up.
+     *
+     * The remote is resolved from the branch itself — a local branch's tracking
+     * config, or the `<remote>/<branch>` prefix of a remote-only row — and the
+     * whole remote is fetched, which is a harmless superset of that one ref.
+     * @param sessionId - session whose workspace backs the repository.
+     * @param name - local branch, or a remote-tracking ref such as `origin/develop`.
+     */
+    fetch(sessionId: string, name: string): Promise<GitFetchView>;
+    /**
+     * Replay the current branch's commits onto another branch.
+     *
+     * A conflict is reported and left in place: the rebase stops exactly where
+     * git stopped, so the user resolves it and runs `git rebase --continue` (or
+     * `--abort`) instead of the plugin guessing which way to go.
+     * @param sessionId - session whose workspace backs the repository.
+     * @param onto - branch or remote-tracking ref the current branch lands on.
+     */
+    rebase(sessionId: string, onto: string): Promise<GitStatusView>;
+    /**
+     * Push one local branch to a remote.
+     *
+     * Without `remote` the branch's configured upstream is used (SourceTree's
+     * "Push to <tracked>"); with `remote` the branch is pushed to the same-named
+     * branch there (or `branch`) and starts tracking it.
+     * @param sessionId - session whose workspace backs the repository.
+     * @param name - local branch to push.
+     * @param remote - configured remote; omitted means the branch's upstream.
+     * @param branch - destination branch name; defaults to the tracked one, then `name`.
+     */
+    pushBranch(sessionId: string, name: string, remote?: string, branch?: string): Promise<GitPushView>;
+    /**
+     * Rename a local branch. The upstream config moves with it, as git does.
+     * @param sessionId - session whose workspace backs the repository.
+     * @param from - existing local branch.
+     * @param to - new local branch name.
+     */
+    renameBranch(sessionId: string, from: string, to: string): Promise<GitStatusView>;
+    /**
+     * Delete a local branch with `-d`; an unmerged branch answers
+     * `git/branch-not-merged` so the browser can ask before forcing `-D`.
+     * @param sessionId - session whose workspace backs the repository.
+     * @param name - local branch to delete; the checked-out branch is refused.
+     * @param force - delete even when the branch is not fully merged.
+     */
+    deleteBranch(sessionId: string, name: string, force?: boolean): Promise<GitStatusView>;
+    /**
+     * The configured remotes with the URL each fetch uses, in git's own order.
+     * @param sessionId - session whose workspace backs the repository.
+     */
+    remotes(sessionId: string): Promise<GitRemotesView>;
     /**
      * Throw away the worktree and index changes for the selected paths: tracked
      * paths go back to HEAD (a staged addition is removed from the index and from
@@ -195,5 +247,12 @@ export declare class GitFlow extends Service {
      */
     private unqualifiedName;
     private remoteBranches;
+    /** Configured remote names, in git's order. */
+    private remoteNames;
+    /**
+     * The remote a fetch of `name` should refresh: a local branch's tracking
+     * remote, the prefix of a remote-only ref, then the repository's default.
+     */
+    private remoteForFetch;
     private runSwitch;
 }
