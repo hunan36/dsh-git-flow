@@ -1,7 +1,7 @@
 {
   "name": "@hunan36/dsh-git-flow",
-  "version": "0.4.2",
-  "description": "Workspace git branch switcher, commit composer with AI-written messages, and push for DeepSeek Harness",
+  "version": "0.5.0",
+  "description": "Workspace git branch switcher, branch merge, commit composer with AI-written messages, and push for DeepSeek Harness",
   "keywords": [
     "dsh",
     "deepseek",
@@ -10,6 +10,7 @@
     "dsh-plugin",
     "git",
     "branch",
+    "merge",
     "commit"
   ],
   "license": "MIT",
