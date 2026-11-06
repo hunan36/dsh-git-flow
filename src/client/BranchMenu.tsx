@@ -48,6 +48,8 @@ export interface BranchMenuProps {
   open: boolean
   onOpenChange: (open: boolean) => void
   onSelectBranch: (name: string) => void
+  /** Merge a branch into the current one, offered from a row's context menu. */
+  onMergeBranch: (name: string) => void
   onNewBranch: () => void
   onCommit: () => void
   /** Push what is already committed, without opening the commit panel. */
@@ -67,6 +69,11 @@ export function BranchMenu(props: BranchMenuProps) {
   const anchorRef = useRef<HTMLSpanElement>(null)
   const panelRef = useRef<HTMLDivElement>(null)
   const [filter, setFilter] = useState('')
+  // The branch row a context menu was opened for, plus the viewport point it
+  // should be anchored at. Kept apart from `open` on purpose: opening the
+  // context menu closes the popover, and an effect watching `open` would wipe
+  // the menu in the same commit.
+  const [context, setContext] = useState<{ name: string; x: number; y: number } | undefined>(undefined)
 
   // Anchored by its BOTTOM edge, a gap above the chip. `useAnchoredPosition`
   // places by `top`, which cannot work for a panel that opens upward and is
@@ -110,6 +117,13 @@ export function BranchMenu(props: BranchMenuProps) {
   useEffect(() => {
     if (open) setFilter('')
   }, [open])
+
+  // Opening the context menu gives up the popover; the menu state is a sibling
+  // overlay, so it survives the close.
+  const openContextMenu = (name: string, point: { x: number; y: number }) => {
+    props.onOpenChange(false)
+    setContext({ name, x: point.x, y: point.y })
+  }
 
   const rows = useMemo(() => buildRows(t, branches, filter), [t, branches, filter])
   const firstBranch = rows.find((row) => row.kind === 'branch' && row.name !== status.head)
@@ -201,9 +215,10 @@ export function BranchMenu(props: BranchMenuProps) {
                 <BranchRow
                   key={row.key}
                   label={row.label}
-                  title={row.name ?? ''}
+                  title={`${row.name ?? ''} · ${t('menu.contextHint')}`}
                   current={row.name === status.head}
                   disabled={busy}
+                  onContextMenu={(point) => { openContextMenu(row.name ?? '', point) }}
                   onSelect={() => {
                     props.onOpenChange(false)
                     props.onSelectBranch(row.name ?? '')
@@ -270,6 +285,29 @@ export function BranchMenu(props: BranchMenuProps) {
         </div>,
         document.body,
       )}
+      {context !== undefined && createPortal(
+        <BranchContextMenu
+          key={`${context.name}:${context.x}:${context.y}`}
+          t={t}
+          name={context.name}
+          current={context.name === status.head}
+          currentBranch={status.head}
+          detached={status.detached}
+          busy={busy}
+          x={context.x}
+          y={context.y}
+          onCheckout={() => {
+            setContext(undefined)
+            props.onSelectBranch(context.name)
+          }}
+          onMerge={() => {
+            setContext(undefined)
+            props.onMergeBranch(context.name)
+          }}
+          onDismiss={() => { setContext(undefined) }}
+        />,
+        document.body,
+      )}
     </>
   )
 }
@@ -281,6 +319,8 @@ function BranchRow(props: {
   current: boolean
   disabled: boolean
   onSelect: () => void
+  /** Reports where a right-click asked for a context menu, in viewport coordinates. */
+  onContextMenu: (point: { x: number; y: number }) => void
 }) {
   const [hover, setHover] = useState(false)
   return (
@@ -290,6 +330,17 @@ function BranchRow(props: {
       disabled={props.disabled}
       title={props.title}
       onClick={props.onSelect}
+      onContextMenu={(event) => {
+        event.preventDefault()
+        // A keyboard-invoked context menu (the ContextMenu key, or Shift+F10)
+        // carries no pointer point; anchor it under the row itself.
+        if (event.clientX === 0 && event.clientY === 0) {
+          const rect = event.currentTarget.getBoundingClientRect()
+          props.onContextMenu({ x: rect.left, y: rect.bottom })
+          return
+        }
+        props.onContextMenu({ x: event.clientX, y: event.clientY })
+      }}
       onPointerEnter={() => { setHover(true) }}
       onPointerLeave={() => { setHover(false) }}
       style={{ ...rowStyle, ...(hover && !props.disabled ? rowHoverStyle : null) }}
@@ -318,6 +369,140 @@ function ActionRow(props: { icon: ReactNode; label: string; disabled?: boolean; 
     >
       <span style={actionIconStyle}>{props.icon}</span>
       {props.label}
+    </button>
+  )
+}
+
+/** Props for the branch-row context menu. */
+interface BranchContextMenuProps {
+  t: TranslateNS<'gitFlow'>
+  /** Branch the menu acts on. */
+  name: string
+  /** True when that branch is already checked out. */
+  current: boolean
+  /** Name of the checked-out branch, so a merge can say what it lands in. */
+  currentBranch: string
+  /** True when HEAD is detached, so a merge has no current branch to name. */
+  detached: boolean
+  busy: boolean
+  /** Viewport coordinates the menu was asked for. */
+  x: number
+  y: number
+  onCheckout: () => void
+  onMerge: () => void
+  onDismiss: () => void
+}
+
+/**
+ * Right-click menu for one branch row: checkout, or merge into the current
+ * branch. Rendered as a sibling overlay of the popover (the popover is closed
+ * to reveal it), fixed-positioned at the pointer and clamped into the viewport.
+ */
+function BranchContextMenu(props: BranchContextMenuProps) {
+  const { t, name, current, currentBranch, detached, busy } = props
+  const menuRef = useRef<HTMLDivElement>(null)
+  const [placement, setPlacement] = useState<{ left: number; top: number } | undefined>(undefined)
+
+  // A fixed-position card can only be clamped once it has a size, so the first
+  // frame is laid out but invisible; resize re-clamps it while it is open.
+  useLayoutEffect(() => {
+    const place = () => {
+      const card = menuRef.current
+      if (card === null) return
+      setPlacement({
+        left: Math.min(Math.max(props.x, MARGIN), Math.max(MARGIN, window.innerWidth - card.offsetWidth - MARGIN)),
+        top: Math.min(Math.max(props.y, MARGIN), Math.max(MARGIN, window.innerHeight - card.offsetHeight - MARGIN)),
+      })
+    }
+    place()
+    window.addEventListener('resize', place)
+    return () => { window.removeEventListener('resize', place) }
+  }, [props.x, props.y])
+
+  // Keyboard users land on the first row that can act; when every row is
+  // disabled the card itself takes focus, so Escape still reaches the handler.
+  useLayoutEffect(() => {
+    const first = menuRef.current?.querySelector<HTMLButtonElement>('button[role="menuitem"]:not(:disabled)')
+    if (first !== null && first !== undefined) first.focus()
+    else menuRef.current?.focus()
+  }, [])
+
+  // The popover's dismiss hook left with it; the menu needs its own listener.
+  useDismissOnOutsidePointer(menuRef, true, (next) => {
+    if (!next) props.onDismiss()
+  })
+
+  /** Rows that can act, in visual order, for arrow-key navigation. */
+  const enabledRows = () => Array.from(
+    menuRef.current?.querySelectorAll<HTMLButtonElement>('button[role="menuitem"]:not(:disabled)') ?? [],
+  )
+
+  return (
+    <div
+      ref={menuRef}
+      role="menu"
+      aria-label={name}
+      tabIndex={-1}
+      style={{ ...contextMenuStyle, ...(placement ?? contextMenuHidingStyle) }}
+      onKeyDown={(event) => {
+        if (event.key === 'Escape') {
+          event.preventDefault()
+          event.stopPropagation()
+          props.onDismiss()
+          return
+        }
+        if (event.key !== 'ArrowDown' && event.key !== 'ArrowUp') return
+        const rows = enabledRows()
+        if (rows.length === 0) return
+        event.preventDefault()
+        const step = event.key === 'ArrowDown' ? 1 : -1
+        const active = document.activeElement
+        const at = active instanceof HTMLButtonElement ? rows.indexOf(active) : -1
+        const next = at === -1
+          ? (step === 1 ? rows[0] : rows[rows.length - 1])
+          : rows[(at + step + rows.length) % rows.length]
+        next.focus()
+      }}
+    >
+      <MenuItemRow
+        icon={<IconBranchOutlineRegular size={14} />}
+        label={t('menu.contextCheckout', { branch: name })}
+        // The current branch cannot be checked out onto itself.
+        disabled={current || busy}
+        onClick={props.onCheckout}
+      />
+      <MenuItemRow
+        icon={<IconRightUpOutlineRegular size={14} />}
+        label={detached
+          ? t('menu.contextMergeCurrent', { branch: name })
+          : t('menu.contextMerge', { branch: name, into: currentBranch })}
+        // A merge needs a branch to land in (HEAD attached) and a source.
+        disabled={current || detached || busy}
+        onClick={props.onMerge}
+      />
+    </div>
+  )
+}
+
+/** One row of the context menu: the popover's action look, label ellipsized. */
+function MenuItemRow(props: { icon: ReactNode; label: string; disabled: boolean; onClick: () => void }) {
+  const [hover, setHover] = useState(false)
+  return (
+    <button
+      type="button"
+      role="menuitem"
+      disabled={props.disabled}
+      onClick={props.onClick}
+      onPointerEnter={() => { setHover(true) }}
+      onPointerLeave={() => { setHover(false) }}
+      style={{
+        ...actionStyle,
+        ...(hover && !props.disabled ? rowHoverStyle : null),
+        ...(props.disabled ? disabledStyle : null),
+      }}
+    >
+      <span style={actionIconStyle}>{props.icon}</span>
+      <span style={contextLabelStyle}>{props.label}</span>
     </button>
   )
 }
@@ -356,6 +541,20 @@ const PANEL_MIN_HEIGHT = 180
 const anchorStyle: CSSProperties = { display: 'inline-flex' }
 const pillStyle: CSSProperties = { gap: 6, maxWidth: 240 }
 const nameStyle: CSSProperties = { overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }
+/**
+ * Frosted menu surface shared by the anchored popover and the branch context
+ * menu, so the two overlays read as the same layer of chrome.
+ */
+const surfaceStyle: CSSProperties = {
+  background: 'var(--dsw-specific-menu, var(--dsw-alias-bg-layer-1, #ffffff))',
+  // The menu surface token is intentionally translucent (#f8f9fa94 in 0.1.7), and
+  // the design pairs it with the shell's frosted blur — the same recipe as the
+  // primitives Menu card. Without it the page shows straight through the popover.
+  backdropFilter: 'var(--dsw-menu-backdrop-filter, blur(40px) saturate(150%))',
+  WebkitBackdropFilter: 'var(--dsw-menu-backdrop-filter, blur(40px) saturate(150%))',
+  border: '1px solid var(--dsw-alias-border-l1, rgba(127,127,127,0.25))',
+  boxShadow: 'var(--dsw-elevation-prominent, 0 12px 32px rgba(0,0,0,0.16))',
+}
 const panelStyle: CSSProperties = {
   // `useAnchoredPosition` returns coordinates only — the fixed positioning that
   // makes them mean anything is the caller's job (the Menu primitive gets it
@@ -368,17 +567,30 @@ const panelStyle: CSSProperties = {
   display: 'flex',
   flexDirection: 'column',
   width: PANEL_WIDTH,
-  background: 'var(--dsw-specific-menu, var(--dsw-alias-bg-layer-1, #ffffff))',
-  // The menu surface token is intentionally translucent (#f8f9fa94 in 0.1.7), and
-  // the design pairs it with the shell's frosted blur — the same recipe as the
-  // primitives Menu card. Without it the page shows straight through the popover.
-  backdropFilter: 'var(--dsw-menu-backdrop-filter, blur(40px) saturate(150%))',
-  WebkitBackdropFilter: 'var(--dsw-menu-backdrop-filter, blur(40px) saturate(150%))',
-  border: '1px solid var(--dsw-alias-border-l1, rgba(127,127,127,0.25))',
   borderRadius: 16,
-  boxShadow: 'var(--dsw-elevation-prominent, 0 12px 32px rgba(0,0,0,0.16))',
   overflow: 'hidden',
+  ...surfaceStyle,
 }
+/** Right-click card: same surface as the popover, sized around its copy. */
+const contextMenuStyle: CSSProperties = {
+  position: 'fixed',
+  // Above the popover (1100), which itself clears modal overlays (1000).
+  zIndex: 1200,
+  display: 'flex',
+  flexDirection: 'column',
+  padding: 4,
+  // A menu-like width: wide enough for a branch name, capped so the label
+  // ellipsizes instead of stretching the card past the viewport.
+  minWidth: 220,
+  maxWidth: 340,
+  borderRadius: 12,
+  // The card itself can take focus when every row is disabled; the browser's
+  // focus ring belongs on the rows, not on the surface.
+  outline: 'none',
+  ...surfaceStyle,
+}
+/** Fixed-position placeholder for the frame before the menu is measured. */
+const contextMenuHidingStyle: CSSProperties = { left: 0, top: 0, visibility: 'hidden' }
 const searchRowStyle: CSSProperties = {
   flex: '0 0 auto',
   padding: '8px 8px 6px',
@@ -435,6 +647,14 @@ const actionStyle: CSSProperties = {
   cursor: 'pointer',
 }
 const actionIconStyle: CSSProperties = { display: 'inline-flex', flex: '0 0 auto' }
+/** Context-menu copy: one line, ellipsized when the branch name is long. */
+const contextLabelStyle: CSSProperties = {
+  flex: '1 1 auto',
+  minWidth: 0,
+  overflow: 'hidden',
+  textOverflow: 'ellipsis',
+  whiteSpace: 'nowrap',
+}
 const disabledStyle: CSSProperties = { opacity: 0.45, cursor: 'default' }
 const aheadStyle: CSSProperties = {
   display: 'inline-flex',

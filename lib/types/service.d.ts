@@ -7,7 +7,7 @@
 import { Service } from '@deepseek-ai/cordis';
 import type { Context } from '@deepseek-ai/cordis';
 import z from '@deepseek-ai/schemastery';
-import type { GitBranchesView, GitCommitView, GitFlowFinishView, GitFlowKind, GitFlowStateView, GitMessageView, GitStatusView, MessageLanguage } from './contract.ts';
+import type { GitBranchesView, GitCommitView, GitFlowFinishView, GitFlowKind, GitFlowStateView, GitMergeView, GitMessageView, GitStatusView, MessageLanguage } from './contract.ts';
 export type { MessageLanguage };
 /** Mountable configuration. */
 export interface GitFlowConfig {
@@ -72,6 +72,18 @@ export declare class GitFlow extends Service {
      * @param base - existing ref to start from.
      */
     createBranch(sessionId: string, name: string, base?: string): Promise<GitStatusView>;
+    /**
+     * Merge one branch into the current one, allowing a fast-forward.
+     *
+     * A conflict is reported and deliberately left in the worktree: the merge
+     * markers, the index and `MERGE_HEAD` stay exactly as a manual merge leaves
+     * them, so the user resolves the conflict and commits instead of losing the
+     * attempt to an automatic abort.
+     * @param sessionId - session whose workspace backs the repository.
+     * @param name - local branch, or a remote-tracking ref such as `origin/develop`.
+     * @returns how the current branch moved, and its new tip.
+     */
+    merge(sessionId: string, name: string): Promise<GitMergeView>;
     /**
      * Throw away the worktree and index changes for the selected paths: tracked
      * paths go back to HEAD (a staged addition is removed from the index and from

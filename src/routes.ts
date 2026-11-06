@@ -43,6 +43,11 @@ export function registerGitFlowRoutes(ctx: Context, service: GitFlow): () => voi
       if (base !== undefined && typeof base !== 'string') throw new GitError('git/invalid-input', 'base must be a string')
       return service.createBranch(sessionId, name, base)
     }) }),
+    ctx.webServer.register({ kind: 'exact', path: `${BASE}/merge`, handler: (req, res) => handle(req, res, async (body) => {
+      requireMethod(req, 'POST')
+      const { sessionId, name } = readBody(body)
+      return service.merge(sessionId, requireString(name, 'name'))
+    }) }),
     ctx.webServer.register({ kind: 'exact', path: `${BASE}/commit`, handler: (req, res) => handle(req, res, async (body) => {
       requireMethod(req, 'POST')
       const { sessionId, files, message, push } = readBody(body)

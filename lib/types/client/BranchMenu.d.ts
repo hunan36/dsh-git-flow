@@ -11,6 +11,8 @@ export interface BranchMenuProps {
     open: boolean;
     onOpenChange: (open: boolean) => void;
     onSelectBranch: (name: string) => void;
+    /** Merge a branch into the current one, offered from a row's context menu. */
+    onMergeBranch: (name: string) => void;
     onNewBranch: () => void;
     onCommit: () => void;
     /** Push what is already committed, without opening the commit panel. */

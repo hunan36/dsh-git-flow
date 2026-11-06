@@ -15,11 +15,13 @@ import type {
   GitFlowFinishView,
   GitFlowStartRequest,
   GitFlowStateView,
+  GitMergeView,
   GitMessageView,
   GitPullView,
   GitPushView,
   GitResponse,
   GitStatusView,
+  MergeRequest,
 } from '../contract.ts'
 import type { GitFlowKey } from './locales.ts'
 
@@ -114,6 +116,7 @@ export const gitApi = {
   branches: (sessionId: string) => request<GitBranchesView>(`/branches?${query(sessionId)}`),
   checkout: (body: CheckoutRequest) => post<GitStatusView>('/checkout', body),
   createBranch: (body: CreateBranchRequest) => post<GitStatusView>('/branch', body),
+  merge: (body: MergeRequest) => post<GitMergeView>('/merge', body),
   commit: (body: CommitRequest) => post<GitCommitView>('/commit', body),
   discard: (body: DiscardRequest) => post<GitStatusView>('/discard', body),
   push: (body: { sessionId: string }) => post<GitPushView>('/push', body),

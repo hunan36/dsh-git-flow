@@ -2,13 +2,14 @@
 
 [English](README.md) | 中文
 
-DeepSeek Harness 工作区 Git 插件：在输入框工具行放一个分支胶囊，点开能看分支、切分支、新建分支，并在面板里勾选文件提交 —— 提交信息由当前会话的模型根据改动自动生成。
+DeepSeek Harness 工作区 Git 插件：在输入框工具行放一个分支胶囊，点开能看分支、切分支、右键把分支合并到当前分支、新建分支，并在面板里勾选文件提交 —— 提交信息由当前会话的模型根据改动自动生成。
 
 ```
 输入框工具行:  [⑂ feature/login  3]  ← 点击（旁边有 Feature 类型徽标）
                  ├ 搜索分支
                  ├ 本地分支 · 2      ✓ feature/login
                  │                   main
+                 │                   ↳ 右键：检出 / 合并到当前分支
                  ├ 新建分支…
                  ├ 提交…                （有改动时可用）
                  ├ 刷新状态
@@ -165,6 +166,17 @@ dsh 的 profile 目录本身就是一个 pnpm workspace（`pnpm-workspace.yaml` 
 提交面板的「生成提交信息」旁有 `English | 中文` 切换，它覆盖本次调用的 `messageLanguage`，并把选择记在 `localStorage`——
 不选就一直默认英文。
 
+## 合并分支
+
+在分支行上点右键（或在行聚焦时按键盘菜单键 / `Shift+F10`），会弹出两个动作：
+
+- **检出** —— 与左键点击相同，脏工作区时同样先弹「强制切换」确认。
+- **合并到当前分支** —— 对当前分支执行 `git merge --no-edit <分支>`，不推送。
+
+能快进就快进；分叉了则生成一个带 git 默认信息的普通合并提交，toast 会说明是哪一种。右键「仅在远端」的行时，直接合并它的 `origin/…` 引用，不会创建本地分支。
+
+冲突**不会**被 abort：冲突标记、索引和 `MERGE_HEAD` 都留在工作区，胶囊随即开始显示冲突文件数。解决冲突后自己提交完成合并 —— 可以在终端里提交，或让会话执行。提交面板只做部分提交（`git commit --only`），git 在合并进行中会拒绝。若本地改动会被覆盖，合并会以 `git/dirty-worktree` 失败，工作区原样不动。把当前分支合并到自己、以及在游离 HEAD 上合并，都会被拒绝。
+
 ## Git Flow
 
 胶囊菜单最下方的「启动 Git Flow 分支」「完成 Git Flow 分支」按标准 git flow 走：功能与发布分支从 `develop` 切出，
@@ -190,6 +202,7 @@ dsh 的 profile 目录本身就是一个 pnpm workspace（`pnpm-workspace.yaml` 
 - 参数永远是数组，从不拼 shell 字符串；`stdin: 'ignore'`，`GIT_TERMINAL_PROMPT=0`，不会卡在凭据提示上。
 - `push` 永不带 `--force` / `--force-with-lease`，只推当前分支的上游（无上游时 `--set-upstream <remote> HEAD:refs/heads/<branch>`）。
 - 提交只 `git add` 面板里勾选的文件；一个都没勾返回 `git/no-files-selected`，绝不隐式 `git add -A`。
+- 合并只对当前分支执行 `git merge --no-edit <分支名>`，分支名来自浏览器；不传 `--no-ff` / `--force` / `-X`，不推送，也绝不自动 abort 冲突合并。
 - 脏工作区切分支默认失败（`git/dirty-worktree`），只有用户在二次确认框里点「强制切换」才带 `--force`。
 - 放弃更改只在确认框里点了「放弃更改」才执行：已跟踪路径用 `git restore --source=HEAD --staged --worktree` 回到 HEAD，未跟踪路径用 `git clean -fd` 删除（不带 `-x`，被忽略的文件不动）；有冲突的文件直接拒绝，不做猜测。
 - `workspaceRegistry` 用 `ctx.get('workspaceRegistry')` 惰性读取，而不是写进 `static inject`：headless 之类的 profile 没有它，
@@ -202,7 +215,7 @@ dsh 的 profile 目录本身就是一个 pnpm workspace（`pnpm-workspace.yaml` 
 ```
 src/
 ├── index.ts       宿主半入口（默认导出 GitFlow 服务）
-├── service.ts     GitFlow：status / branches / checkout / createBranch / commit / discard / push / pull / generateMessage
+├── service.ts     GitFlow：status / branches / checkout / createBranch / merge / commit / discard / push / pull / generateMessage
 │                 + gitflowState / startFlow / initDevelop / finishFlow
 ├── git.ts         GitRunner：subprocess + 净化 env + 超时 + porcelain v2 解析
 ├── routes.ts      /api/dsh-git-flow/*（仅挂载在有 webServer 的 profile）

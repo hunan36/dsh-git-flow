@@ -2,13 +2,14 @@
 
 English | [中文](README.zh.md)
 
-A DeepSeek Harness workspace git plugin: a branch chip in the composer tool row. Open it to browse branches, switch branches, create one, and commit a checked subset of files — the commit message is written by the session's own model from the diff.
+A DeepSeek Harness workspace git plugin: a branch chip in the composer tool row. Open it to browse branches, switch branches, create one, merge one into the current branch, and commit a checked subset of files — the commit message is written by the session's own model from the diff.
 
 ```
 composer tool row:  [⑂ feature/login  3]  ← click (a Feature badge sits beside it)
                       ├ Search branches
                       ├ Local branches · 2   ✓ feature/login
                       │                        main
+                      │                        ↳ right-click: Checkout / Merge into current
                       ├ New branch…
                       ├ Commit…                (enabled while the tree is dirty)
                       ├ Refresh status
@@ -165,6 +166,17 @@ Set in `cordis.patch.yml`:
 
 The commit panel carries an `English | 中文` switch beside "Draft message". It overrides `messageLanguage` for that call and remembers the choice in `localStorage`, so English stays the default until you pick otherwise.
 
+## Merging a branch
+
+Right-click a branch row (or press the keyboard menu key / `Shift+F10` while it is focused) to get two actions:
+
+- **Checkout** — the same switch as a left click, including the dirty-worktree confirmation.
+- **Merge into the current branch** — runs `git merge --no-edit <branch>` on the current branch; nothing is pushed.
+
+A merge that can fast-forward does; a diverged branch produces a normal merge commit with git's default message. The toast reports which happened. A remote-only row merges its `origin/…` ref without creating a local branch.
+
+A conflict is **not** aborted: the conflict markers, the index and `MERGE_HEAD` stay in the worktree, and the chip starts showing the conflicted files. Resolve them and commit the merge yourself — from a terminal or by asking the session. The commit panel only makes partial commits (`git commit --only`), which git refuses while a merge is in progress. If local edits would be overwritten, the merge fails with `git/dirty-worktree` and the worktree is left untouched. Merging the current branch into itself and merging into a detached HEAD are both refused.
+
 ## Git flow
 
 The bottom two rows of the branch menu start and finish standard git-flow branches: features and releases branch off `develop`,
@@ -190,6 +202,7 @@ A finish runs: merge, tag, commit the `package.json` `version`, push the branche
 - Arguments are always an array, never a shell string, with `stdin: 'ignore'` and `GIT_TERMINAL_PROMPT=0`, so a credential prompt can never hang a call.
 - `push` never passes `--force` or `--force-with-lease`, and only pushes the current branch's upstream (with `--set-upstream <remote> HEAD:refs/heads/<branch>` when it has none).
 - Commits stage only the files checked in the panel. An empty selection answers `git/no-files-selected` and never falls back to an implicit `git add -A`.
+- A merge runs only `git merge --no-edit <name>` against the current branch, with a branch name the browser sent. It never passes `--no-ff`/`--force`/`-X`, never pushes, and never aborts a conflicted merge.
 - Switching branches on a dirty worktree fails by default (`git/dirty-worktree`). Only the user's second confirmation in the dialog sends `--force`.
 - Discarding runs only after the destructive action is picked in a confirmation dialog: tracked paths go back to HEAD with `git restore --source=HEAD --staged --worktree`, untracked paths are removed with `git clean -fd` (no `-x`, so ignored files stay), and a conflicted path is refused rather than guessed at.
 - `workspaceRegistry` is read lazily through `ctx.get('workspaceRegistry')` instead of being declared in `static inject`, so a profile without one (the shipped `headless` profile) still activates this entry rather than leaving a permanently pending plugin; every git call there answers `git/not-a-repository`.
@@ -200,7 +213,7 @@ A finish runs: merge, tag, commit the `package.json` `version`, push the branche
 ```
 src/
 ├── index.ts       host entry (default-exports the GitFlow service)
-├── service.ts     GitFlow: status / branches / checkout / createBranch / commit / discard / push / pull / generateMessage
+├── service.ts     GitFlow: status / branches / checkout / createBranch / merge / commit / discard / push / pull / generateMessage
 │                  + gitflowState / startFlow / initDevelop / finishFlow
 ├── git.ts         GitRunner: subprocess + scrubbed env + timeout + porcelain v2 parsing
 ├── routes.ts      /api/dsh-git-flow/* (registered only where a webServer exists)

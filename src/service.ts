@@ -11,8 +11,8 @@ import type { Workspace } from '@deepseek-ai/dsh-workspace'
 import z from '@deepseek-ai/schemastery'
 import { readFile, writeFile } from 'node:fs/promises'
 import * as nodePath from 'node:path'
-import type { GitBranchesView, GitBranchView, GitCommitView, GitFileView, GitFlowConfigView, GitFlowFinishView, GitFlowKind, GitFlowStateView, GitMessageView, GitStatusView, MessageLanguage } from './contract.ts'
-import { describeFailure, GitError, GitRunner, parseStatus } from './git.ts'
+import type { GitBranchesView, GitBranchView, GitCommitView, GitFileView, GitFlowConfigView, GitFlowFinishView, GitFlowKind, GitFlowStateView, GitMergeView, GitMessageView, GitStatusView, MessageLanguage } from './contract.ts'
+import { describeFailure, GitError, GitRunner, parseStatus, type GitResult } from './git.ts'
 import { generateCommitMessage } from './message.ts'
 import { registerGitFlowRoutes } from './routes.ts'
 
@@ -227,6 +227,52 @@ export class GitFlow extends Service {
     if (base !== undefined && base.length > 0) args.push(base)
     await this.runSwitch(repo, args)
     return this.status(sessionId)
+  }
+
+  /**
+   * Merge one branch into the current one, allowing a fast-forward.
+   *
+   * A conflict is reported and deliberately left in the worktree: the merge
+   * markers, the index and `MERGE_HEAD` stay exactly as a manual merge leaves
+   * them, so the user resolves the conflict and commits instead of losing the
+   * attempt to an automatic abort.
+   * @param sessionId - session whose workspace backs the repository.
+   * @param name - local branch, or a remote-tracking ref such as `origin/develop`.
+   * @returns how the current branch moved, and its new tip.
+   */
+  async merge(sessionId: string, name: string): Promise<GitMergeView> {
+    const status = await this.status(sessionId)
+    if (status.detached) throw new GitError('git/detached-head', 'there is no current branch to merge into')
+    assertBranchName(name)
+    if (name === status.head) throw new GitError('git/invalid-input', `cannot merge ${name} into itself`)
+    const repo = status.repo
+    // The menu lists remote-only rows by their `origin/…` short ref, which is
+    // a valid merge source; any branch that exists locally resolves the same way.
+    const verified = await this.git.run(repo, ['rev-parse', '--verify', '--quiet', `${name}^{commit}`])
+    if (verified.exitCode !== 0) throw new GitError('git/invalid-input', `branch ${name} does not exist`)
+    // An unborn HEAD has no oid; the empty string keeps "did HEAD move?" honest.
+    const before = (await this.git.run(repo, ['rev-parse', 'HEAD'])).stdout.trim()
+    const result = await this.git.run(repo, ['merge', '--no-edit', '--', name])
+    if (result.exitCode !== 0) {
+      const after = parseStatus((await this.git.runOk(repo, ['status', '--porcelain=v2', '--branch', '-z'])).stdout)
+      if (after.files.some((file) => file.conflicted)) {
+        throw new GitError('git/merge-conflict', `merging ${name} into ${status.head} conflicted; resolve the conflicts, then commit`)
+      }
+      if (worktreeBlocked(result)) throw new GitError('git/dirty-worktree', (result.stderr || result.stdout).trim())
+      throw new GitError('git/failed', describeFailure(['merge', '--no-edit', '--', name], result))
+    }
+    const head = (await this.git.runOk(repo, ['rev-parse', 'HEAD'])).stdout.trim()
+    const summary = trimOutput(`${result.stdout}\n${result.stderr}`)
+    if (head === before) return { branch: name, into: status.head, mode: 'up-to-date', summary }
+    // A fast-forward only moves HEAD; a real merge records a second parent.
+    const parents = (await this.git.runOk(repo, ['rev-list', '--parents', '-n', '1', 'HEAD'])).stdout.trim().split(/\s+/).length - 1
+    return {
+      branch: name,
+      into: status.head,
+      mode: parents > 1 ? 'merge' : 'fast-forward',
+      commit: head.slice(0, 7),
+      summary,
+    }
   }
 
   /**
@@ -688,11 +734,15 @@ export class GitFlow extends Service {
     const result = await this.git.run(repo, args)
     if (result.exitCode === 0) return
     const detail = (result.stderr || result.stdout).trim()
-    if (/local changes|would be overwritten|not clean|Your index contains staged changes/i.test(detail)) {
-      throw new GitError('git/dirty-worktree', detail)
-    }
+    if (worktreeBlocked(result)) throw new GitError('git/dirty-worktree', detail)
     throw new GitError('git/failed', describeFailure(args, result))
   }
+}
+
+/** git's own wording when local edits prevent a switch or a merge. */
+function worktreeBlocked(result: GitResult): boolean {
+  return /local changes|would be overwritten|not clean|Your index contains staged changes|Please commit your changes or stash/i
+    .test(`${result.stderr}\n${result.stdout}`)
 }
 
 /** Reject inputs that could read as an option or break out of the repository. */

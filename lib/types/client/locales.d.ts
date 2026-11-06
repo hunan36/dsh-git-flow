@@ -26,6 +26,10 @@ declare const zh: {
     readonly 'menu.refresh': "刷新状态";
     readonly 'menu.startFlow': "启动 Git Flow 分支…";
     readonly 'menu.finishFlow': "完成 Git Flow 分支…";
+    readonly 'menu.contextCheckout': "检出 {branch}";
+    readonly 'menu.contextMerge': "合并 {branch} 至 {into}";
+    readonly 'menu.contextMergeCurrent': "合并 {branch} 至当前分支";
+    readonly 'menu.contextHint': "右键可检出或合并";
     readonly 'flow.feature': "功能";
     readonly 'flow.release': "发布";
     readonly 'flow.hotfix': "热修复";
@@ -101,6 +105,9 @@ declare const zh: {
     readonly 'commit.done': "已提交 {hash}";
     readonly 'commit.pushDone': "已提交并推送 {hash}";
     readonly 'commit.pushFail': "已提交 {hash}，但推送失败";
+    readonly 'merge.upToDate': "合并 {branch} 至 {into}：已是最新";
+    readonly 'merge.fastForward': "已快进合并 {branch} 至 {into}";
+    readonly 'merge.merge': "已合并 {branch} 至 {into}（{commit}）";
     readonly 'push.done': "已推送 {branch}";
     readonly 'pull.done': "已拉取 {branch}";
     readonly 'status.clean': "工作区干净";
@@ -114,7 +121,7 @@ declare const zh: {
     readonly 'error.invalid': "输入不合法：{detail}";
     readonly 'error.failed': "操作失败：{detail}";
     readonly 'error.developMissing': "仓库里还没有 develop 分支，请先创建";
-    readonly 'error.mergeConflict': "合并时出现冲突，请先解决冲突再完成分支";
+    readonly 'error.mergeConflict': "合并出现冲突，已保留冲突现场，请先解决冲突再继续";
     readonly 'error.tagExists': "标签已经存在：{detail}";
     readonly 'error.gitflowBranchRequired': "当前分支不是功能、发布或热修复分支";
 };
@@ -137,6 +144,10 @@ export declare const gitFlowLocale: {
         readonly 'menu.refresh': "刷新状态";
         readonly 'menu.startFlow': "启动 Git Flow 分支…";
         readonly 'menu.finishFlow': "完成 Git Flow 分支…";
+        readonly 'menu.contextCheckout': "检出 {branch}";
+        readonly 'menu.contextMerge': "合并 {branch} 至 {into}";
+        readonly 'menu.contextMergeCurrent': "合并 {branch} 至当前分支";
+        readonly 'menu.contextHint': "右键可检出或合并";
         readonly 'flow.feature': "功能";
         readonly 'flow.release': "发布";
         readonly 'flow.hotfix': "热修复";
@@ -212,6 +223,9 @@ export declare const gitFlowLocale: {
         readonly 'commit.done': "已提交 {hash}";
         readonly 'commit.pushDone': "已提交并推送 {hash}";
         readonly 'commit.pushFail': "已提交 {hash}，但推送失败";
+        readonly 'merge.upToDate': "合并 {branch} 至 {into}：已是最新";
+        readonly 'merge.fastForward': "已快进合并 {branch} 至 {into}";
+        readonly 'merge.merge': "已合并 {branch} 至 {into}（{commit}）";
         readonly 'push.done': "已推送 {branch}";
         readonly 'pull.done': "已拉取 {branch}";
         readonly 'status.clean': "工作区干净";
@@ -225,11 +239,11 @@ export declare const gitFlowLocale: {
         readonly 'error.invalid': "输入不合法：{detail}";
         readonly 'error.failed': "操作失败：{detail}";
         readonly 'error.developMissing': "仓库里还没有 develop 分支，请先创建";
-        readonly 'error.mergeConflict': "合并时出现冲突，请先解决冲突再完成分支";
+        readonly 'error.mergeConflict': "合并出现冲突，已保留冲突现场，请先解决冲突再继续";
         readonly 'error.tagExists': "标签已经存在：{detail}";
         readonly 'error.gitflowBranchRequired': "当前分支不是功能、发布或热修复分支";
     };
-    en: Record<"chip.tooltip" | "chip.tooltip.clean" | "chip.aheadBehind" | "chip.unpushed" | "menu.search" | "menu.local" | "menu.remote" | "menu.empty" | "menu.loading" | "menu.newBranch" | "menu.commit" | "menu.push" | "menu.pull" | "menu.refresh" | "menu.startFlow" | "menu.finishFlow" | "flow.feature" | "flow.release" | "flow.hotfix" | "flow.badge" | "start.title" | "start.description" | "start.kind" | "start.name" | "start.placeholder" | "start.submit" | "start.done" | "start.needName" | "start.base" | "start.versionHint" | "initDevelop.title" | "initDevelop.description" | "initDevelop.submit" | "initDevelop.done" | "finish.title" | "finish.description" | "finish.mergeInto" | "finish.tag" | "finish.version" | "finish.push" | "finish.delete" | "finish.versionLabel" | "finish.submit" | "finish.tagExists" | "finish.done" | "finish.partial" | "finish.merged" | "finish.tagCreated" | "finish.versionWritten" | "finish.deleted" | "finish.pushFail" | "checkout.done" | "checkout.dirtyTitle" | "checkout.dirtyBody" | "checkout.force" | "create.title" | "create.description" | "create.name" | "create.placeholder" | "create.submit" | "create.done" | "commit.title" | "commit.description" | "commit.files" | "commit.selectAll" | "commit.message" | "commit.messageLanguage" | "commit.messagePlaceholder" | "commit.generate" | "commit.regenerate" | "commit.generating" | "commit.push" | "commit.commit" | "commit.commitPush" | "commit.cancel" | "commit.discard" | "commit.discardTitle" | "commit.discardBody" | "commit.discardDone" | "commit.discardOne" | "commit.resize" | "commit.none" | "commit.needMessage" | "commit.selected" | "commit.noUpstream" | "commit.fallback" | "commit.staleHost" | "commit.fallbackReason" | "commit.done" | "commit.pushDone" | "commit.pushFail" | "push.done" | "pull.done" | "status.clean" | "status.conflict" | "error.notRepository" | "error.notInstalled" | "error.timeout" | "error.noRoute" | "error.detached" | "error.noFiles" | "error.invalid" | "error.failed" | "error.developMissing" | "error.mergeConflict" | "error.tagExists" | "error.gitflowBranchRequired", string>;
+    en: Record<"chip.tooltip" | "chip.tooltip.clean" | "chip.aheadBehind" | "chip.unpushed" | "menu.search" | "menu.local" | "menu.remote" | "menu.empty" | "menu.loading" | "menu.newBranch" | "menu.commit" | "menu.push" | "menu.pull" | "menu.refresh" | "menu.startFlow" | "menu.finishFlow" | "menu.contextCheckout" | "menu.contextMerge" | "menu.contextMergeCurrent" | "menu.contextHint" | "flow.feature" | "flow.release" | "flow.hotfix" | "flow.badge" | "start.title" | "start.description" | "start.kind" | "start.name" | "start.placeholder" | "start.submit" | "start.done" | "start.needName" | "start.base" | "start.versionHint" | "initDevelop.title" | "initDevelop.description" | "initDevelop.submit" | "initDevelop.done" | "finish.title" | "finish.description" | "finish.mergeInto" | "finish.tag" | "finish.version" | "finish.push" | "finish.delete" | "finish.versionLabel" | "finish.submit" | "finish.tagExists" | "finish.done" | "finish.partial" | "finish.merged" | "finish.tagCreated" | "finish.versionWritten" | "finish.deleted" | "finish.pushFail" | "checkout.done" | "checkout.dirtyTitle" | "checkout.dirtyBody" | "checkout.force" | "create.title" | "create.description" | "create.name" | "create.placeholder" | "create.submit" | "create.done" | "commit.title" | "commit.description" | "commit.files" | "commit.selectAll" | "commit.message" | "commit.messageLanguage" | "commit.messagePlaceholder" | "commit.generate" | "commit.regenerate" | "commit.generating" | "commit.push" | "commit.commit" | "commit.commitPush" | "commit.cancel" | "commit.discard" | "commit.discardTitle" | "commit.discardBody" | "commit.discardDone" | "commit.discardOne" | "commit.resize" | "commit.none" | "commit.needMessage" | "commit.selected" | "commit.noUpstream" | "commit.fallback" | "commit.staleHost" | "commit.fallbackReason" | "commit.done" | "commit.pushDone" | "commit.pushFail" | "merge.upToDate" | "merge.fastForward" | "merge.merge" | "push.done" | "pull.done" | "status.clean" | "status.conflict" | "error.notRepository" | "error.notInstalled" | "error.timeout" | "error.noRoute" | "error.detached" | "error.noFiles" | "error.invalid" | "error.failed" | "error.developMissing" | "error.mergeConflict" | "error.tagExists" | "error.gitflowBranchRequired", string>;
 };
 /** Every copy key of the `gitFlow` namespace. */
 export type GitFlowKey = keyof typeof zh;

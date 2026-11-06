@@ -94,6 +94,23 @@ export interface GitPullView {
   pullNote: string
 }
 
+/** How the current branch moved when a merge ran. */
+export type GitMergeMode = 'up-to-date' | 'fast-forward' | 'merge'
+
+/** `POST /api/dsh-git-flow/merge`: merge another branch into the current one. */
+export interface GitMergeView {
+  /** Branch that was merged in, as the menu named it (`develop`, `origin/develop`). */
+  branch: string
+  /** Branch that received the merge — the current branch. */
+  into: string
+  /** Nothing to do, a fast-forward, or a merge commit. */
+  mode: GitMergeMode
+  /** Short hash the current branch now points at; absent when up to date. */
+  commit?: string
+  /** git's own summary, trimmed to its last lines. */
+  summary: string
+}
+
 /** `POST /api/dsh-git-flow/generate-message`. */
 export interface GitMessageView {
   message: string
@@ -218,6 +235,12 @@ export interface CommitRequest {
   files: string[]
   message: string
   push?: boolean
+}
+/** `POST /api/dsh-git-flow/merge`: merge `name` into the current branch. */
+export interface MergeRequest {
+  sessionId: string
+  /** Local branch name, or a remote-tracking ref such as `origin/develop`. */
+  name: string
 }
 
 /** `POST /api/dsh-git-flow/discard`: throw the selected paths back to HEAD. */

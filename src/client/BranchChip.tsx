@@ -5,11 +5,12 @@
 import { useCallback, useEffect, useState } from 'react'
 import { IconWarningOutlineRegular, Toast } from '@deepseek-ai/dsh-client-ui-primitives'
 import type { TranslateNS } from '@deepseek-ai/dsh-client-ui-slots'
-import type { GitBranchesView, GitFlowStateView, GitStatusView } from '../contract.ts'
+import type { GitBranchesView, GitFlowStateView, GitMergeMode, GitStatusView } from '../contract.ts'
 import { BranchMenu } from './BranchMenu.tsx'
 import { CommitDialog, CreateBranchDialog, ForceCheckoutDialog } from './CommitDialog.tsx'
 import { FinishFlowDialog, InitDevelopDialog, StartFlowDialog } from './GitFlowDialog.tsx'
 import { errorText, GitApiError, gitApi, isSilentError } from './api.ts'
+import type { GitFlowKey } from './locales.ts'
 
 /** Props the session-scoped slot delivers to this entry. */
 export interface GitFlowChipProps {
@@ -31,6 +32,17 @@ interface Banner {
   seq: number
   text: string
   failed: boolean
+}
+
+/**
+ * Toast copy for each way a merge can move the current branch. Typed as the
+ * full wire union, so a new merge mode is a compile error rather than a blank
+ * notification.
+ */
+const MERGE_DONE: Record<GitMergeMode, GitFlowKey> = {
+  'up-to-date': 'merge.upToDate',
+  'fast-forward': 'merge.fastForward',
+  merge: 'merge.merge',
 }
 
 /** Branch chip for the session's workspace; renders nothing outside a repository. */
@@ -131,6 +143,24 @@ export function GitFlowChip({ sessionId, t }: GitFlowChipProps) {
     }
   }
 
+  /** Merge another branch into the current one, straight from the branch menu. */
+  const mergeBranch = async (name: string) => {
+    setBusy(true)
+    try {
+      const result = await gitApi.merge({ sessionId, name })
+      notify(t(MERGE_DONE[result.mode], { branch: result.branch, into: result.into, commit: result.commit ?? '' }))
+      // The commit tips, ahead/behind counts and flow state all moved with it.
+      refresh()
+    } catch (error) {
+      notify(errorText(t, error), true)
+      // A conflict is a deliberate half-finished merge: the worktree now holds
+      // the conflict markers, and the chip should show the conflicted files.
+      if (error instanceof GitApiError && error.code === 'git/merge-conflict') refresh()
+    } finally {
+      setBusy(false)
+    }
+  }
+
   const checkout = async (name: string) => {
     if (name === status?.head) return
     setBusy(true)
@@ -159,6 +189,7 @@ export function GitFlowChip({ sessionId, t }: GitFlowChipProps) {
         open={open}
         onOpenChange={setOpen}
         onSelectBranch={(name) => { void checkout(name) }}
+        onMergeBranch={(name) => { void mergeBranch(name) }}
         onNewBranch={() => { setDialog({ kind: 'new' }) }}
         onCommit={() => {
           // The panel lists whatever status it was opened with, and files can
